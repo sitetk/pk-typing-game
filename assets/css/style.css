@@ -1,0 +1,17 @@
+/* Basic styling for PK Typing Game */
+:root{
+  --bg:#0b1221;
+  --card:#0f1724;
+  --accent:#60a5fa;
+  --text:#e6eef8;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;background:var(--bg);color:var(--text)}
+main#app{max-width:720px;margin:36px auto;padding:24px;background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);border-radius:10px}
+header h1{margin:0 0 6px 0;font-size:1.6rem}
+.subtitle{margin:0;color:rgba(230,238,248,0.7)}
+#game{margin-top:20px;display:flex;flex-direction:column;gap:12px}
+#word-box{background:var(--card);padding:18px;border-radius:8px;font-size:1.4rem;text-align:center}
+input#input{padding:10px;border-radius:6px;border:1px solid rgba(255,255,255,0.06);background:#071123;color:var(--text);font-size:1rem}
+#info{display:flex;gap:12px;justify-content:space-between;color:rgba(230,238,248,0.85)}
+footer{margin-top:18px;color:rgba(230,238,248,0.6);font-size:0.85rem}
