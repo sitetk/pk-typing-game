@@ -3,6 +3,22 @@
  * UI更新と入力制御の統括
  */
 const SAVE_SLOT_IDS = ['1', '2', '3'];
+const createStageIds = (count) => Array.from({ length: count }, (_, index) => `ST_${String(index + 1).padStart(2, '0')}`);
+const STORY_REGIONS = {
+    KANTO: {
+        key: 'KANTO',
+        label: 'カントー地方編',
+        description: 'マサラタウンから はじまる ぼうけんの はじまり。',
+        image: 'assets/img/kanto-story-img.png',
+        stageIds: createStageIds(48)
+    },
+    DEFAULT: {
+        key: 'DEFAULT',
+        label: 'ストーリーを えらぶ',
+        description: 'リッジョンを えらんで たびだとう。',
+        image: 'assets/img/kanto-story-img.png'
+    }
+};
 const App = {
     loader: null,
     typing: null,
@@ -29,6 +45,11 @@ const App = {
     pendingImport: null,
 
     currentMode: null,
+    storyRegion: null,
+    storySelectedStageId: null,
+    storyStageList: [],
+    storyRegionDisplayName: '',
+    storyRegionImageUrl: '',
     clearedStages: new Set(),
     defeatedPokemonIds: new Set(),
     capturedPokemonIds: new Set(),
@@ -165,7 +186,16 @@ const App = {
             keyboard: document.getElementById('onscreen-keyboard'),
             keyboardColumn: document.getElementById('keyboard-column'),
             keys: document.querySelectorAll('.kb-key'),
-            battleArea: document.querySelector('.battle-area')
+            battleArea: document.querySelector('.battle-area'),
+            storyRegionSelectScreen: document.getElementById('story-region-select-screen'),
+            storyRegionBackBtn: document.getElementById('story-region-back-btn'),
+            storyRegionCards: document.querySelectorAll('#story-region-select-screen .region-card'),
+            storyStageScreen: document.getElementById('story-stage-screen'),
+            storyStageGrid: document.getElementById('story-stage-grid'),
+            storyStageBackBtn: document.getElementById('story-stage-back-btn'),
+            storyStageTitle: document.getElementById('story-stage-current-name'),
+            storyStageDesc: document.getElementById('story-stage-current-description'),
+            storyStageBannerImage: document.getElementById('story-stage-banner-img')
         };
     },
 
@@ -240,6 +270,21 @@ const App = {
         document.querySelectorAll('#command-menu .cmd-btn').forEach(btn => {
             btn.addEventListener('click', (e) => e.preventDefault());
         });
+        if (this.dom.storyRegionCards) {
+            this.dom.storyRegionCards.forEach(card => card.onclick = null);
+        }
+        if (this.dom.storyRegionBackBtn) {
+            this.dom.storyRegionBackBtn.onclick = () => {
+                this.audio.playSe('select');
+                this.showModeSelectScreen();
+            };
+        }
+        if (this.dom.storyStageBackBtn) {
+            this.dom.storyStageBackBtn.onclick = () => {
+                this.audio.playSe('select');
+                this.showStoryRegionSelectScreen();
+            };
+        }
     },
 
     showStartScreen() {
@@ -353,6 +398,7 @@ const App = {
         this.currentSlotId = slotId;
         this.defeatedPokemonIds = new Set(slotData.defeatedPokemonIds || []);
         this.capturedPokemonIds = new Set(slotData.capturedPokemonIds || []);
+        this.clearedStages = new Set(slotData.clearedStages || []);
         this.setActiveSlotFromData(slotData);
         if (this.isSlotEmpty(slotData)) {
             this.pendingSlotForName = slotId;
@@ -503,7 +549,35 @@ const App = {
     handleModeSelect(mode) {
         this.currentMode = mode;
         this.audio.playSe('select');
-        if (mode === 'BATTLE') this.showPartySelectScreen();
+        if (mode === 'STORY') this.showStoryRegionSelectScreen();
+        else if (mode === 'BATTLE') this.showPartySelectScreen();
+    },
+
+    handleStoryRegionSelect(region) {
+        if (!region) return;
+        this.storyRegion = region;
+        this.audio.playSe('select');
+        const regionDef = STORY_REGIONS[region] || STORY_REGIONS.DEFAULT;
+        this.storyRegionDisplayName = regionDef.label;
+        this.storyRegionImageUrl = regionDef.image;
+        const allStages = this.loader.stageList || [];
+        const stageIds = regionDef.stageIds || allStages.map(stage => stage.id);
+        const targeted = stageIds.map((id, index) => {
+            const found = allStages.find(stage => stage.id === id);
+            if (!found) return null;
+            const prevStageId = stageIds[index - 1];
+            const isLocked = index > 0 && prevStageId && !this.clearedStages.has(prevStageId);
+            return {
+                ...found,
+                isLocked,
+                previewText: index === 0 ? 'stage01' : ''
+            };
+        }).filter(Boolean);
+        const visibleStages = targeted.length ? targeted : allStages.map((stage, index) => ({
+            ...stage,
+            isLocked: index > 0 && !this.clearedStages.has(allStages[index - 1]?.id)
+        }));
+        this.showStoryStageScreen(visibleStages);
     },
 
     showPartySelectScreen(logHistory = true) {
@@ -511,6 +585,98 @@ const App = {
         this.dom.partySelectScreen.classList.remove('hidden');
         this.renderPartySelect();
         if (logHistory) this.recordScreen('party-select');
+    },
+
+    showStoryRegionSelectScreen(logHistory = true) {
+        this.hideAllScreens();
+        if (this.dom.startPanel) this.dom.startPanel.classList.add('hidden');
+        const modePanel = document.getElementById('mode-select');
+        if (modePanel) modePanel.classList.add('hidden');
+        if (this.dom.storyRegionSelectScreen) this.dom.storyRegionSelectScreen.classList.remove('hidden');
+        if (this.dom.storyStageScreen) this.dom.storyStageScreen.classList.add('hidden');
+        this.attachStoryRegionCardHandlers();
+        if (logHistory) this.recordScreen('story-region-select');
+    },
+
+    showStoryStageScreen(stages = []) {
+        const maxStageTiles = 48;
+        const displayStages = Array.isArray(stages) ? stages.slice(0, maxStageTiles) : [];
+        this.storyStageList = displayStages;
+        this.hideAllScreens();
+        if (this.dom.storyStageBannerImage && this.storyRegionImageUrl) {
+            this.dom.storyStageBannerImage.src = this.storyRegionImageUrl;
+        }
+        if (this.dom.storyStageRegionLabel) {
+            this.dom.storyStageRegionLabel.textContent = this.storyRegionDisplayName || STORY_REGIONS.DEFAULT.label;
+        }
+        if (this.dom.storyStageScreen) this.dom.storyStageScreen.classList.remove('hidden');
+        this.renderStoryStages(displayStages);
+        const firstStage = displayStages[0];
+        if (this.dom.storyStageTitle) this.dom.storyStageTitle.textContent = firstStage?.name || 'ステージを えらぶ';
+        if (this.dom.storyStageDesc) {
+            this.dom.storyStageDesc.textContent = firstStage?.description || 'ステージを えらぶと ここに じょうほうが ひょうじされます。';
+        }
+        this.recordScreen('story-stage-select');
+        if (firstStage) {
+            this.handleStoryStageSelect(firstStage.id);
+        }
+    },
+
+    handleStoryStageSelect(stageId) {
+        if (!stageId || !this.storyStageList.length || !this.dom.storyStageGrid) return;
+        const stage = this.storyStageList.find(s => s.id === stageId);
+        if (!stage) return;
+        this.storySelectedStageId = stageId;
+        if (this.dom.storyStageTitle) this.dom.storyStageTitle.textContent = stage.name;
+        if (this.dom.storyStageDesc) this.dom.storyStageDesc.textContent = stage.description;
+        this.dom.storyStageGrid.querySelectorAll('.story-stage-block').forEach(block => {
+            block.classList.toggle('selected', block.dataset.stageId === stageId);
+        });
+    },
+
+    renderStoryStages(stages = []) {
+        if (!this.dom.storyStageGrid) return;
+        const displayStages = Array.isArray(stages) ? stages : [];
+        if (!displayStages.length) {
+            this.dom.storyStageGrid.innerHTML = '<p class="text-center text-sm text-slate-500">表示できるステージが ありません。</p>';
+            return;
+        }
+        this.dom.storyStageGrid.innerHTML = displayStages.map((stage) => {
+            const stageIdLabel = stage.id ? stage.id.split('_').pop()?.padStart(2, '0') : '00';
+            const stageName = stage.name || 'ステージ';
+            const locked = Boolean(stage.isLocked);
+            const stageType = stage.type ? stage.type.toUpperCase() : 'STAGE';
+            const description = locked ? '' : (stage.description || 'じゅんびちゅうの ステージです。');
+            const statusLabel = locked ? 'ロック中' : 'プレイ可能';
+            return `
+            <button type="button" class="story-stage-block${locked ? ' locked' : ''}" data-stage-id="${stage.id || ''}" aria-label="${stageName} (${statusLabel})" ${locked ? 'disabled' : ''}>
+                <div class="story-stage-card">
+                    <div class="story-stage-card-header">
+                        <span class="story-stage-card-id">ST_${stageIdLabel}</span>
+                        <span class="story-stage-card-type">${stageType}</span>
+                    </div>
+                    <h4 class="story-stage-card-title">${stageName}</h4>
+                    ${description ? `<p class="story-stage-card-summary">${description}</p>` : ''}
+                    <span class="story-stage-card-state${locked ? ' locked' : ''}">${statusLabel}</span>
+                </div>
+            </button>
+            `;
+        }).join('');
+        this.dom.storyStageGrid.querySelectorAll('.story-stage-block').forEach(block => {
+            block.onclick = () => this.handleStoryStageSelect(block.dataset.stageId);
+        });
+    },
+
+    attachStoryRegionCardHandlers() {
+        const cards = document.querySelectorAll('#story-region-select-screen .region-card');
+        cards.forEach(card => card.onclick = null);
+        cards.forEach(card => {
+            if (!card.disabled) {
+                card.addEventListener('click', () => this.handleStoryRegionSelect(card.dataset.region));
+            } else {
+                card.onclick = null;
+            }
+        });
     },
 
     renderPartySelect() {
@@ -1249,7 +1415,16 @@ const App = {
     },
 
     hideAllScreens() {
-        const screens = [this.dom.titleScreen, this.dom.partySelectScreen, this.dom.customPartyScreen, this.dom.enemySelectScreen, this.dom.moveConfigScreen, this.dom.battleScreen];
+        const screens = [
+            this.dom.titleScreen,
+            this.dom.partySelectScreen,
+            this.dom.customPartyScreen,
+            this.dom.enemySelectScreen,
+            this.dom.moveConfigScreen,
+            this.dom.battleScreen,
+            this.dom.storyRegionSelectScreen,
+            this.dom.storyStageScreen
+        ];
         screens.forEach(s => s && s.classList.add('hidden'));
         if (this.dom.keyboardColumn) this.dom.keyboardColumn.classList.add('hidden');
     },

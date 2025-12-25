@@ -1,0 +1,6 @@
+stage_id,stage_name,get_mode,type_1,reward_name_1,reward_level_1,type_2,reward_name_2,reward_level_2,type_3,reward_name_3,reward_level_3
+ST_01,オーキドけんきゅうじょ,ONE,POKEMON,フシギダネ,5,POKEMON,ヒトカゲ,5,POKEMON,ゼニガメ,5
+ST_23,タマムシゲームコーナー,ALL,POKEMON,ポリゴン,26,ITEM,コインケース,,ITEM,わざマシン,,
+ST_32,タマムシシティ,ALL,ITEM,かいふくのくすり,,ITEM,モンスターボール,,ITEM,スーパーボール,,
+ST_34,シルフカンパニー,ALL,POKEMON,ラプラス,15,ITEM,マスターボール,,,
+ST_37,かくとうどうじょう,ONE,POKEMON,サワムラー,30,POKEMON,エビワラー,30,,
