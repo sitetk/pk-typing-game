@@ -1,17 +1,875 @@
-/* Basic styling for PK Typing Game */
-:root{
-  --bg:#0b1221;
-  --card:#0f1724;
-  --accent:#60a5fa;
-  --text:#e6eef8;
+/* --- Base Variables & Reset --- */
+:root {
+    --primary-blue: #2563eb;
+    --player-blue: #3b82f6;
+    --enemy-red: #ef4444;
+    --emerald-400: #10b981;
+    --text-main: #333333;
+    --bg-main: #f8fafc;
+    --bg-panel: #ffffff;
+    --border-color: #cbd5e1;
 }
-*{box-sizing:border-box}
-html,body{height:100%;margin:0;font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;background:var(--bg);color:var(--text)}
-main#app{max-width:720px;margin:36px auto;padding:24px;background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);border-radius:10px}
-header h1{margin:0 0 6px 0;font-size:1.6rem}
-.subtitle{margin:0;color:rgba(230,238,248,0.7)}
-#game{margin-top:20px;display:flex;flex-direction:column;gap:12px}
-#word-box{background:var(--card);padding:18px;border-radius:8px;font-size:1.4rem;text-align:center}
-input#input{padding:10px;border-radius:6px;border:1px solid rgba(255,255,255,0.06);background:#071123;color:var(--text);font-size:1rem}
-#info{display:flex;gap:12px;justify-content:space-between;color:rgba(230,238,248,0.85)}
-footer{margin-top:18px;color:rgba(230,238,248,0.6);font-size:0.85rem}
+
+body, html {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow-x: hidden;
+}
+
+#save-to-file-btn {
+    z-index: 2100;
+    border-width: 1px;
+    border-style: solid;
+}
+
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(10px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    z-index: 1500;
+}
+
+.modal-card {
+    width: min(480px, 90vw);
+    background: #ffffff;
+    border-radius: 1.5rem;
+    padding: 1.75rem;
+    box-shadow: 0 20px 60px rgba(15, 23, 42, 0.3);
+    border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.modal-card input[type="text"] {
+    width: 100%;
+    padding: 0.85rem 1rem;
+    border-radius: 0.875rem;
+    border: 1px solid #cbd5e1;
+    background: #f8fafc;
+    font-size: 1rem;
+    font-family: inherit;
+}
+
+.modal-card .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    margin-top: 1.25rem;
+}
+
+.modal-card .btn-secondary {
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    color: #475569;
+}
+
+.import-slot-btn {
+    border-radius: 0.75rem;
+    border: 1px solid transparent;
+    background: #0ea5e9;
+    color: #ffffff;
+    font-weight: 700;
+    padding: 0.85rem 1rem;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.import-slot-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(14, 165, 233, 0.35);
+    border-color: #0284c7;
+}
+
+.game-container {
+    container-type: size;
+    container-name: game-viewport;
+    width: min(100%, 1200px);
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 10px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    color: var(--text-main);
+    background-color: var(--bg-main);
+}
+
+/* 各画面コンテナの幅調整 */
+#title-screen,
+#party-select-screen,
+#custom-party-screen,
+#enemy-select-screen,
+#move-config-screen,
+#battle-screen {
+    width: 100%;
+    max-width: none;
+    margin: 0 auto;
+}
+
+/* ドット絵のレンダリング設定 */
+.pixel-art {
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+}
+
+/* --- UI Parts: Slots and Grids --- */
+
+/* 選択済みスロット */
+.member-slot {
+    aspect-ratio: 1 / 1;
+    transition: all 0.2s ease;
+    border-width: 2px;
+    border-style: dashed;
+    border-color: var(--border-color);
+    border-radius: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    background-color: rgba(248, 250, 252, 0.8);
+    color: #94a3b8;
+}
+
+/* 自分側のスロット埋まり状態 */
+.member-slot.filled {
+    border-style: solid;
+    border-color: var(--player-blue);
+    background-color: white;
+    color: var(--player-blue);
+    box-shadow: 0 4px 6px rgba(59, 130, 246, 0.1);
+}
+
+/* 相手側のスロット埋まり状態 */
+.member-slot.enemy-filled {
+    border-style: solid;
+    border-color: var(--enemy-red);
+    background-color: white;
+    color: var(--enemy-red);
+    box-shadow: 0 4px 6px rgba(239, 68, 68, 0.1);
+}
+
+.member-slot img {
+    width: 80%;
+    height: 80%;
+    object-fit: contain;
+}
+
+/* ポケモンリスト (36体 6x6固定) */
+#custom-pokemon-list,
+#enemy-pokemon-list {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-auto-rows: minmax(96px, auto);
+    gap: 0.5rem;
+    padding: 0.75rem;
+    min-height: 520px;
+    overflow: hidden;
+}
+
+/* リスト内カード */
+.dense-pokemon-card {
+    background: white;
+    border: 2px solid #e2e8f0;
+    border-radius: 0.75rem;
+    padding: 0.5rem;
+    cursor: pointer;
+    text-align: center;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.dense-pokemon-card:hover {
+    transform: translateY(-2px);
+    border-color: #94a3b8;
+}
+
+/* 自分側の選択中 */
+.dense-pokemon-card.selected {
+    border-color: var(--player-blue);
+    background-color: #eff6ff;
+    box-shadow: inset 0 0 0 1px var(--player-blue);
+}
+
+/* 相手側の選択中 */
+.dense-pokemon-card.enemy-selected {
+    border-color: var(--enemy-red);
+    background-color: #fef2f2;
+    box-shadow: inset 0 0 0 1px var(--enemy-red);
+}
+
+.dense-pokemon-card img {
+    width: 60px;
+    height: 60px;
+    margin-bottom: 0.35rem;
+    object-fit: contain;
+}
+
+.trophy-icon {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    font-size: 0.85rem;
+}
+
+.capture-icon {
+    position: absolute;
+    top: 6px;
+    left: 8px;
+    font-size: 0.85rem;
+}
+
+.poke-row {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.poke-number-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.1rem;
+}
+
+.poke-captured-label {
+    color: #dc2626;
+    font-size: 0.55rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.poke-number {
+    width: 40px;
+    text-align: left;
+}
+
+.poke-name {
+    flex: 1;
+    text-align: left;
+}
+
+#enemy-select-screen .pagination-controls:last-of-type {
+    display: none;
+}
+
+/* --- Battle Animations --- */
+
+/* 攻撃側: 跳ねる */
+@keyframes anim-bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-30px); }
+}
+.anim-bounce {
+    animation: anim-bounce 0.5s ease-out;
+}
+
+/* ダメージ側: 震える */
+@keyframes anim-shake-damage {
+    0%, 100% { transform: translateX(0); filter: brightness(1); }
+    20% { transform: translateX(-10px); filter: brightness(1.5) sepia(0.5); }
+    40% { transform: translateX(10px); }
+    60% { transform: translateX(-10px); }
+    80% { transform: translateX(10px); }
+}
+.anim-shake {
+    animation: anim-shake-damage 0.4s ease-in-out;
+}
+
+/* 戦闘不能: 下に沈む */
+@keyframes anim-sink {
+    to { transform: translateY(100px); opacity: 0; }
+}
+.anim-sink {
+    animation: anim-sink 1s forwards ease-in;
+}
+
+/* モンスターボール投擲用コンテナ */
+.pokeball-anim-container {
+    position: absolute;
+    bottom: 20%;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    pointer-events: none;
+}
+
+.pokeball-img {
+    width: 50px;
+    height: 50px;
+    image-rendering: pixelated;
+}
+
+/* ボール投擲: 左下(自分)から敵に向かってダイナミックに飛ぶ */
+@keyframes ball-throw {
+    0% {
+        transform: translate(-500px, 400px) scale(2.5) rotate(0deg);
+        opacity: 0;
+    }
+    15% { opacity: 1; }
+    50% {
+        transform: translate(-200px, -150px) scale(1.5) rotate(360deg);
+    }
+    100% {
+        transform: translate(0, 0) scale(1) rotate(1080deg);
+    }
+}
+.anim-ball-throw {
+    animation: ball-throw 0.8s cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+}
+
+/* ボール揺れ */
+@keyframes ball-shake {
+    0%, 100% { transform: rotate(0deg); }
+    20% { transform: rotate(-20deg); }
+    40% { transform: rotate(20deg); }
+    60% { transform: rotate(0deg); }
+}
+.anim-ball-shake {
+    animation: ball-shake 0.8s ease-in-out 3;
+}
+
+/* 捕獲成功 */
+.captured-ball {
+    filter: brightness(0.4) grayscale(0.3);
+    transition: filter 0.5s;
+}
+
+/* --- Battle UI Details --- */
+.battle-sprite-container {
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    min-height: 250px;
+    position: relative;
+}
+
+.battle-sprite-img {
+    width: auto;
+    height: auto;
+    transition: transform 0.2s, opacity 0.5s;
+}
+
+/* --- スプライトの上寄せ --- */
+#enemy-sprite,
+#player-sprite {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    height: 100%;
+}
+
+/* --- バトル画面の非表示処理 --- */
+#battle-screen.hidden { display: none; }
+
+/* --- コマンドボタン --- */
+#command-menu .cmd-btn {
+    border: 2px solid transparent;
+    border-radius: 1rem;
+    padding: 0.25rem;
+    color: #fff;
+    box-shadow: 0 15px 40px rgba(0,0,0,0.1);
+    pointer-events: none;
+}
+
+#command-menu .cmd-btn[data-cmd="tatakau"] { background-color: #9F5557; border-color: #7a3d3f; }
+#command-menu .cmd-btn[data-cmd="dougu"] { background-color: #886927; border-color: #5e471f; }
+#command-menu .cmd-btn[data-cmd="pokemon"] { background-color: #426E27; border-color: #2e421a; }
+#command-menu .cmd-btn[data-cmd="nigeru"] { background-color: #2B5575; border-color: #1b3b51; }
+
+#command-menu .cmd-btn span { color: inherit; }
+
+/* --- 捕獲演出用ステート --- */
+.capture-throw {
+    background: radial-gradient(circle at 60% 10%, rgba(255, 255, 255, 0.7), transparent 60%);
+}
+
+.capture-throw .battle-sprite-img,
+.capture-success .battle-sprite-img {
+    opacity: 0;
+}
+
+.capture-success .pokeball-anim-container {
+    pointer-events: none;
+}
+
+@keyframes ball-captured {
+    0% { transform: scale(1) translateY(0); }
+    50% { transform: scale(1.15) translateY(-12px); }
+    100% { transform: scale(0.8) translateY(0); }
+}
+
+.anim-ball-captured {
+    animation: ball-captured 0.9s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* バトル画面セクションの高さ制御 */
+#battle-screen {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 150px);
+    gap: 1rem;
+    background-image: url('assets/img/battle_bg.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+#battle-screen.hidden {
+    display: none;
+}
+
+#battle-screen:not(.hidden) {
+    display: flex;
+}
+
+#battle-top-section {
+    flex: 0 0 60%;
+    min-height: 60%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+#battle-top-section > .battle-area,
+#battle-top-section > .list-column {
+    height: 100%;
+}
+
+#battle-middle-section {
+    flex: 0 0 10%;
+    min-height: 10%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.typing-display-panel {
+    height: 100%;
+    min-height: 100%;
+}
+
+#battle-message-area {
+    height: 100%;
+}
+
+#keyboard-column {
+    flex: 0 0 30%;
+    min-height: 30%;
+}
+
+.battle-keyboard-section {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.battle-sprite-img {
+    max-height: 190px;
+    max-width: 220px;
+}
+
+#enemy-sprite .battle-sprite-container,
+#player-sprite .battle-sprite-container {
+    align-items: flex-start;
+    height: 100%;
+}
+
+#enemy-sprite,
+#player-sprite {
+    width: 100%;
+    height: 100%;
+}
+
+.enemy-sprite-hidden {
+    opacity: 0;
+    visibility: hidden;
+}
+
+.battle-columns {
+    display: grid;
+    grid-template-columns: 1fr;
+    height: 100%;
+    gap: 1rem;
+}
+
+@media (min-width: 1024px) {
+    .battle-columns {
+        grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+    }
+}
+
+.battle-top-section {
+    align-items: stretch;
+}
+
+#keyboard-column {
+    display: flex;
+    flex-direction: column;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    overflow: hidden;
+    flex-shrink: 0;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+#keyboard-column::-webkit-scrollbar {
+    display: none;
+}
+
+.battle-message-area {
+    min-height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.enemy-sprite-hidden {
+    opacity: 0;
+    visibility: hidden;
+}
+
+.hp-bar-inner {
+    transition: width 0.5s ease-out, background-color 0.3s;
+}
+
+/* --- Virtual Keyboard --- */
+.kb-key {
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.1s ease;
+    width: 60px!important;
+    height: 45px!important;
+    min-width: 60px;
+    border-radius: 0.5rem;
+    padding: 0;
+    border: none;
+    background: #f7f7f7;
+    color: #333333;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+}
+
+.kb-key:active {
+    transform: translateY(2px);
+}
+
+/* --- Virtual Keyboard Highlight --- */
+.key-active {
+    background-color: var(--player-blue);
+    color: #ffffff;
+    box-shadow: 0 0 12px rgba(59, 130, 246, 0.8);
+    border: 2px solid #1e40af;
+    animation: key-blink 1.2s infinite ease-in-out;
+    z-index: 10;
+}
+
+.kb-key.key-active {
+    background-color: var(--player-blue);
+    color: #ffffff;
+    box-shadow: 0 0 12px rgba(59, 130, 246, 0.8);
+    border: 2px solid #1e40af;
+}
+
+#onscreen-keyboard {
+    max-width: 100%;
+    overflow: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+#onscreen-keyboard > div {
+    flex-wrap: wrap;
+}
+
+/* --- 技リスト用カード --- */
+.move-card {
+    border-radius: 1rem;
+    padding: 0.75rem;
+    border: 2px solid var(--type-border, #e2e8f0);
+    background-color: var(--type-bg, #f8fafc);
+    transition: border-color 0.2s ease, transform 0.2s ease;
+    cursor: pointer;
+    color: #111827;
+}
+
+.move-check-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border-radius: 1rem;
+    border: 2px solid var(--type-border, #e2e8f0);
+    background-color: var(--type-bg, #f8fafc);
+    padding: 0.75rem 1rem;
+    width: 100%;
+    cursor: pointer;
+    transition: border-color 0.2s ease, transform 0.2s ease;
+}
+.move-check-item input {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+.move-card:hover {
+    border-color: var(--player-blue);
+    transform: translateY(-2px);
+}
+.move-card:active {
+    transform: translateY(0);
+}
+.move-card .move-number {
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 900;
+    letter-spacing: 0.2em;
+    color: #2563eb;
+    margin-right: 0.5rem;
+}
+.move-card .move-meta {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+}
+
+@keyframes key-blink {
+    0%, 100% {
+        background-color: var(--player-blue);
+        color: #ffffff;
+    }
+    50% {
+        background-color: #ffffff;
+        color: var(--player-blue);
+    }
+}
+
+/* --- Type color helpers (move cards & check items) --- */
+.type-normal { --type-border: #9ca3af; --type-bg: #f8fafc; }
+.type-fire { --type-border: #ef4444; --type-bg: #fee2e2; }
+.type-water { --type-border: #3b82f6; --type-bg: #dbeafe; }
+.type-electric { --type-border: #eab308; --type-bg: #fefce8; }
+.type-grass { --type-border: #22c55e; --type-bg: #dcfce7; }
+.type-ice { --type-border: #22d3ee; --type-bg: #ecfeff; }
+.type-fighting { --type-border: #c2410c; --type-bg: #fff7ed; }
+.type-poison { --type-border: #a855f7; --type-bg: #f5f3ff; }
+.type-ground { --type-border: #d97706; --type-bg: #fffbeb; }
+.type-flying { --type-border: #0ea5e9; --type-bg: #ecfeff; }
+.type-psychic { --type-border: #ec4899; --type-bg: #fdf2f8; }
+.type-bug { --type-border: #16a34a; --type-bg: #dcfce7; }
+.type-rock { --type-border: #78716c; --type-bg: #f5f5f4; }
+.type-ghost { --type-border: #4c1d95; --type-bg: #eef2ff; }
+.type-dragon { --type-border: #4338ca; --type-bg: #eef2ff; }
+.type-dark { --type-border: #334155; --type-bg: #f1f5f9; }
+.type-steel { --type-border: #64748b; --type-bg: #f8fafc; }
+.type-fairy { --type-border: #fb7185; --type-bg: #fdf2f8; }
+.type-default { --type-border: #e2e8f0; --type-bg: #f8fafc; }
+
+/* --- Container Queries (Responsive) --- */
+
+@container game-viewport (min-width: 961px) {
+    .battle-sprite-img { width: 120px; height: auto; }
+    .dense-pokemon-card div { font-size: 0.75rem; }
+}
+
+@container game-viewport (min-width: 768px) and (max-width: 960px) {
+    .battle-sprite-img { width: 300px; height: 300px; }
+}
+
+@container game-viewport (max-width: 767px) {
+    .battle-sprite-img { width: 200px; height: 200px; }
+    .member-slot { height: 65px; font-size: 8px; }
+    #custom-pokemon-list, #enemy-pokemon-list { gap: 2px; }
+    .dense-pokemon-card { padding: 2px; }
+    .dense-pokemon-card div { font-size: 8px; }
+}
+
+/* タイピングカーソル */
+.typing-cursor::after {
+    content: '_';
+    animation: blink 0.8s infinite;
+    color: var(--player-blue);
+    font-weight: bold;
+}
+
+@keyframes blink { 50% { opacity: 0; } }
+
+/* --- その他 既存スタイルの調整 --- */
+.party-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+    width: 100%;
+}
+
+/* --- Party selection cards --- */
+.party-cards-wrapper {
+    overflow: hidden;
+}
+
+.party-card-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1.25rem;
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+    width: 100%;
+    justify-items: center;
+    align-items: start;
+}
+
+.party-card {
+    min-width: 220px;
+    max-width: 260px;
+    padding: 1rem;
+    border-radius: 1.25rem;
+    border: 2px solid var(--border-color);
+    background: white;
+    box-shadow: 0 15px 30px rgba(15, 23, 42, 0.15);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    position: relative;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.party-card:hover {
+    border-color: var(--player-blue);
+    transform: translateY(-4px);
+}
+
+.party-card-active {
+    border-color: var(--player-blue);
+    box-shadow: 0 20px 35px rgba(59, 130, 246, 0.25);
+}
+
+.party-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.party-card-header h3 {
+    font-size: 1.2rem;
+    margin: 0;
+    font-weight: 800;
+}
+
+.party-trash-btn {
+    background: none;
+    border: none;
+    font-size: 1.1rem;
+    color: #ef4444;
+    cursor: pointer;
+    transition: transform 0.15s ease;
+}
+
+.party-trash-btn:hover {
+    transform: scale(1.1);
+}
+
+.party-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.party-card-body .party-pokemon-row {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.party-card-body .party-pokemon-row img {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+}
+
+.party-pokemon-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: 80px;
+    gap: 0.35rem;
+}
+
+.party-pokemon-grid img {
+    width: 64px;
+    height: 64px;
+}
+
+
+.party-card-footer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    font-size: 0.85rem;
+    color: #475569;
+}
+
+.party-card-footer span {
+    display: flex;
+    justify-content: space-between;
+}
+
+.party-pagination-controls {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.party-pagination-btn {
+    border: 1px solid #cbd5e1;
+    background: white;
+    border-radius: 999px;
+    padding: 0.4rem 1rem;
+    font-size: 0.875rem;
+    color: #334155;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.party-pagination-btn:disabled {
+    border-color: #e2e8f0;
+    color: #94a3b8;
+    cursor: not-allowed;
+}
+
+.party-pagination-info {
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.party-create-card {
+    min-width: 200px;
+    padding: 1rem;
+    border-radius: 1.25rem;
+    border: 2px dashed var(--border-color);
+    background: #f8fafc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.party-create-card strong {
+    display: block;
+    margin-top: 0.35rem;
+}

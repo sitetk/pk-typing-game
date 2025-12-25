@@ -1,34 +1,450 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>PK Typing Game</title>
-  <link rel="stylesheet" href="assets/css/style.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>ポケモン タイピング</title>
+
+    <!-- 1. Tailwind CSS (CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- 2. 外部CSS (メイン) - IDを付与してJSから監視可能にする -->
+    <link id="main-style-link" rel="stylesheet" href="assets/css/style.css?v=20251224_rev4">
+
+    <style>
+        /* --- 修正ポイント1: クリティカルCSS（外部ファイルが遅れても崩れない最低限の定義） --- */
+        body { 
+            opacity: 0; 
+            background-color: #f3f4f6;
+            overflow-x: hidden;
+            transition: opacity 0.3s ease-in;
+        }
+        
+
+        /* 読み込み完了後に付与するクラス */
+        body.is-loaded { 
+            opacity: 1; 
+        }
+
+        #debug-error-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%;
+            background: rgba(255, 230, 230, 0.95);
+            color: #d00;
+            z-index: 9999;
+            padding: 10px;
+            font-family: monospace;
+        }
+    </style>
+
+    <script>
+        /**
+         * 修正ポイント2: 描画確定処理の強化
+         * 外部CSSの読み込み完了を確認してから画面を表示します。
+         */
+        function activateStyles() {
+            if (document.body.classList.contains('is-loaded')) return;
+
+            // コンテナクエリの再計算を強制（Ctrl+Sと同じ効果をシミュレート）
+            window.dispatchEvent(new Event('resize'));
+            
+            // 少しだけ遅延させて描画を安定させる
+            setTimeout(() => {
+                document.body.classList.add('is-loaded');
+                window.dispatchEvent(new Event('resize'));
+            }, 100);
+        }
+
+        // CSSファイルの読み込み完了を検知
+        document.addEventListener('DOMContentLoaded', () => {
+            const styleLink = document.getElementById('main-style-link');
+            
+            // すでに読み込み済みか、読み込み完了時に実行
+            if (styleLink.sheet) {
+                activateStyles();
+            } else {
+                styleLink.addEventListener('load', activateStyles);
+            }
+
+            // 万が一loadイベントが発火しない場合のバックアップ（0.5秒後に強制表示）
+            setTimeout(activateStyles, 500);
+        });
+
+        window.onerror = function(msg, url, line) {
+            const overlay = document.getElementById('debug-error-overlay');
+            if (overlay) {
+                overlay.style.display = 'block';
+                overlay.textContent += `[Error] ${msg} (${line})\n`;
+            }
+            return false;
+        };
+    </script>
 </head>
-<body>
-  <main id="app">
-    <header>
-      <h1>PK Typing Game</h1>
-      <p class="subtitle">ローマ字でポケモン名をタイプしよう！</p>
-    </header>
+<body class="bg-slate-50 text-[#333] font-sans antialiased selection:bg-blue-200 selection:text-[#333]">
 
-    <section id="game">
-      <div id="word-box">読み込み中...</div>
-      <input id="input" type="text" autocomplete="off" autofocus />
-      <div id="info">
-        <span id="score">Score: 0</span>
-        <span id="timer">Time: 60</span>
-      </div>
-    </section>
+    <div id="debug-error-overlay"></div>
 
-    <footer>
-      <small>Sample project skeleton — 実装を拡張してください。</small>
-    </footer>
-  </main>
+    <div class="game-container relative min-h-screen flex flex-col items-center justify-center p-2">
 
-  <script src="assets/js/firebase-config.js"></script>
-  <script src="assets/js/typing.js"></script>
-  <script src="assets/js/main.js"></script>
+        <button id="mute-btn" class="fixed top-4 left-4 z-[2000] bg-white/80 backdrop-blur border border-slate-300 rounded-full p-2 shadow hover:bg-slate-100 transition-colors" title="音量切り替え">
+            <span id="mute-icon" class="text-xl">🔊</span>
+        </button>
+        <button id="save-to-file-btn" class="fixed top-4 right-4 z-[2000] bg-white/90 border border-slate-300 rounded-full px-4 py-2 text-sm font-semibold shadow-lg hover:bg-slate-100 transition-colors">
+            💾 セーブ
+        </button>
+
+        <!-- タイトル画面 -->
+        <div id="title-screen" class="w-full max-w-4xl p-2 md:p-4 animate-in fade-in duration-500 flex flex-col items-center justify-center min-h-[40vh]">
+            <header class="text-center mb-8">
+                <h1 class="title-logo-container">
+                    <img src="assets/img/title.png" alt="ポケタイピング" class="title-logo-img mx-auto max-w-xs md:max-w-md" onerror="this.style.display='none'; document.getElementById('title-fallback').style.display='block';">
+                    <div id="title-fallback" style="display:none; font-size:2rem; font-weight:bold; color:#333;">POKEMON TYPING</div>
+                </h1>
+            </header>
+            <div id="load-status" class="text-center text-slate-500 mb-8 font-mono animate-pulse">データを よみこんでいます...</div>
+            <div id="start-panel" class="w-full flex justify-center items-center animate-in slide-in-from-bottom-4 duration-500 hidden">
+                <button id="game-start-btn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-4 px-12 rounded-full text-xl shadow-lg transition transform hover:scale-105 active:scale-95">GAME START</button>
+            </div>
+            <div id="save-select-screen" class="hidden w-full max-w-4xl p-4 md:p-6 animate-in fade-in duration-500 bg-white/90 rounded-3xl shadow-xl backdrop-blur-sm">
+                <header class="flex items-center justify-between mb-4">
+                    <h2 class="text-2xl font-black text-[#333]">セーブデータを選ぶ</h2>
+                    <button id="save-return-btn" class="text-sm text-slate-500 hover:text-slate-800">もどる</button>
+                </header>
+                <div class="flex flex-col gap-2 mb-4 md:flex-row md:items-center md:justify-between">
+                    <button id="import-from-file-btn" class="w-full md:w-auto bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold px-4 py-2 rounded-2xl border border-slate-200 shadow-sm transition">ファイルからロード</button>
+                    <p class="text-xs text-slate-500 md:text-right">localStorage → ファイルダウンロード → 再読込 でデータを復元できます</p>
+                </div>
+                <div id="save-slot-grid" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+            </div>
+            <input type="file" id="save-file-input" accept=".json" class="hidden">
+            <div id="name-input-modal" class="hidden modal-overlay">
+                <div class="modal-card">
+                    <h3 class="text-xl font-bold text-slate-900 mb-2">はじめから プレイする</h3>
+                    <p class="text-sm text-slate-500 mb-4">プレイヤー名を きめて、セーブデータをつくろう</p>
+                    <input type="text" id="name-input-field" placeholder="なまえ（例：サトシ）">
+                    <div class="modal-actions">
+                        <button id="name-input-cancel" class="btn-secondary px-4 py-2 rounded-full">キャンセル</button>
+                        <button id="name-input-confirm" class="px-4 py-2 rounded-full bg-blue-600 text-white font-semibold shadow-lg">はじめる</button>
+                    </div>
+                </div>
+            </div>
+            <div id="import-target-modal" class="hidden modal-overlay">
+                <div class="modal-card">
+                    <h3 class="text-xl font-bold text-slate-900">データを かきこみます</h3>
+                    <p id="import-data-summary" class="text-sm text-slate-500 mt-2">読み込んだデータ情報</p>
+                    <p class="text-xs text-slate-400 mt-1">どのスロットに 上書き保存しますか？</p>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mt-4">
+                        <button class="import-slot-btn" data-slot-id="1">スロット 1</button>
+                        <button class="import-slot-btn" data-slot-id="2">スロット 2</button>
+                        <button class="import-slot-btn" data-slot-id="3">スロット 3</button>
+                    </div>
+                    <div class="modal-actions mt-4">
+                        <button id="import-cancel-btn" class="btn-secondary px-4 py-2 rounded-full">キャンセル</button>
+                    </div>
+                </div>
+            </div>
+            <div id="mode-select" class="w-full hidden animate-in slide-in-from-bottom-4 duration-500 flex flex-col md:flex-row justify-center items-center gap-6">
+                <button class="mode-btn w-full md:w-auto max-w-xs transition-transform hover:scale-105 active:scale-95" data-mode="STORY">
+                    <img src="assets/img/story_mode.png" alt="ストーリーモード" class="w-full h-auto rounded-xl shadow-lg border-4 border-transparent hover:border-blue-400">
+                </button>
+                <button class="mode-btn w-full md:w-auto max-w-xs transition-transform hover:scale-105 active:scale-95" data-mode="BATTLE">
+                    <img src="assets/img/battle_mode.png" alt="バトルモード" class="w-full h-auto rounded-xl shadow-lg border-4 border-transparent hover:border-red-400">
+                </button>
+            </div>
+        </div>
+
+        <!-- パーティ選択画面 -->
+        <div id="party-select-screen" class="hidden w-full max-w-6xl p-4 md:p-8 animate-in fade-in duration-500 bg-white/90 rounded-3xl shadow-xl backdrop-blur-sm">
+            <header class="relative flex items-center justify-center mb-6">
+                <button id="party-back-btn" class="absolute left-0 text-slate-500 font-bold hover:text-blue-600">← もどる</button>
+                <h2 class="text-3xl font-black text-[#333]">パーティ せんたく</h2>
+                <button class="mode-switch-btn absolute right-0 text-sm bg-slate-100 px-3 py-1 rounded-full hover:bg-slate-200">モード切替 ⇄</button>
+            </header>
+            <p class="text-slate-500 mb-6 font-mono text-sm text-center">いっしょに たたかう ポケモンを えらんでね</p>
+            <div class="party-cards-wrapper mb-4">
+                <div id="party-grid" class="party-card-row"></div>
+            </div>
+            <div class="party-card-footer flex flex-col md:flex-row md:items-center md:justify-center gap-4">
+                <div id="create-custom-card" class="party-create-card">
+                    <span class="text-center">+ じぶんで えらぶ<br><strong>（最大6ぴき）</strong></span>
+                </div>
+                <div class="party-pagination-controls w-full md:w-auto justify-center">
+                    <button id="party-prev-page" type="button" class="party-pagination-btn">前のページ</button>
+                    <span id="party-page-info" class="party-pagination-info">1 / 1</span>
+                    <button id="party-next-page" type="button" class="party-pagination-btn">次のページ</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- じぶんのポケモンをえらぶ画面 -->
+        <div id="custom-party-screen" class="hidden w-full max-w-6xl p-4 md:p-6 animate-in fade-in duration-500 bg-white/90 rounded-3xl shadow-xl backdrop-blur-sm">
+            <header class="relative flex items-center justify-between mb-4">
+                <button id="custom-back-btn" class="text-slate-500 font-bold hover:text-blue-600">← もどる</button>
+                <h2 class="text-2xl font-black text-blue-600">じぶんのポケモンをえらぶ</h2>
+                <button id="custom-confirm-btn" class="bg-blue-600 text-white px-6 py-2 rounded-full font-bold shadow disabled:opacity-50">決定</button>
+            </header>
+
+            <!-- 選択済みメンバー表示: 6枠に拡張 -->
+            <div class="grid grid-cols-6 gap-2 mb-6" id="player-slots-container">
+                <div class="member-slot h-24 bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-[10px] text-slate-400" id="slot-0">1ぴきめ</div>
+                <div class="member-slot h-24 bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-[10px] text-slate-400" id="slot-1">2ひきめ</div>
+                <div class="member-slot h-24 bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-[10px] text-slate-400" id="slot-2">3びきめ</div>
+                <div class="member-slot h-24 bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-[10px] text-slate-400" id="slot-3">4ひきめ</div>
+                <div class="member-slot h-24 bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-[10px] text-slate-400" id="slot-4">5ひきめ</div>
+                <div class="member-slot h-24 bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-[10px] text-slate-400" id="slot-5">6ぴきめ</div>
+            </div>
+
+            <div class="pagination-controls flex justify-center items-center gap-4 mb-2">
+                <button class="page-btn prev-btn bg-white border rounded px-3 py-1 shadow hover:bg-slate-50">&lt;</button>
+                <span class="page-info font-mono">1 / 10</span>
+                <button class="page-btn next-btn bg-white border rounded px-3 py-1 shadow hover:bg-slate-50">&gt;</button>
+            </div>
+
+            <!-- 6×6グリッドに変更 -->
+            <div id="custom-pokemon-list" class="grid grid-cols-6 gap-2 h-96 overflow-y-auto p-2 border rounded-xl bg-slate-50"></div>
+
+            <div class="pagination-controls flex justify-center items-center gap-4 mt-2">
+                <button class="page-btn prev-btn bg-white border rounded px-3 py-1 shadow hover:bg-slate-50">&lt;</button>
+                <span class="page-info font-mono">1 / 10</span>
+                <button class="page-btn next-btn bg-white border rounded px-3 py-1 shadow hover:bg-slate-50">&gt;</button>
+            </div>
+        </div>
+
+        <!-- あいてのポケモンをえらぶ画面 (味方側UIと完全に統一) -->
+        <div id="enemy-select-screen" class="hidden w-full max-w-6xl p-4 md:p-6 animate-in fade-in duration-500 bg-white/90 rounded-3xl shadow-xl backdrop-blur-sm">
+            <header class="relative flex items-center justify-between mb-4">
+                <button id="enemy-select-back-btn" class="text-slate-500 font-bold hover:text-blue-600">← もどる</button>
+                <h2 class="text-2xl font-black text-red-600">あいてのポケモンをえらぶ</h2>
+                <button id="enemy-confirm-btn" class="bg-red-600 text-white px-6 py-2 rounded-full font-bold shadow disabled:opacity-50">決定</button>
+            </header>
+
+            <!-- 選択済みメンバー表示: 6枠 -->
+            <div class="grid grid-cols-6 gap-2 mb-6" id="enemy-slots-container">
+                <div class="member-slot enemy-slot h-24 bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-[10px] text-slate-400" id="enemy-slot-0">1ぴきめ</div>
+                <div class="member-slot enemy-slot h-24 bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-[10px] text-slate-400" id="enemy-slot-1">2ひきめ</div>
+                <div class="member-slot enemy-slot h-24 bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-[10px] text-slate-400" id="enemy-slot-2">3びきめ</div>
+                <div class="member-slot enemy-slot h-24 bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-[10px] text-slate-400" id="enemy-slot-3">4ひきめ</div>
+                <div class="member-slot enemy-slot h-24 bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-[10px] text-slate-400" id="enemy-slot-4">5ひきめ</div>
+                <div class="member-slot enemy-slot h-24 bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-[10px] text-slate-400" id="enemy-slot-5">6ぴきめ</div>
+            </div>
+
+            <div class="pagination-controls flex justify-center items-center gap-4 mb-2">
+                <button class="page-btn prev-btn bg-white border rounded px-3 py-1 shadow hover:bg-slate-50">&lt;</button>
+                <span class="page-info font-mono">1 / 10</span>
+                <button class="page-btn next-btn bg-white border rounded px-3 py-1 shadow hover:bg-slate-50">&gt;</button>
+            </div>
+
+            <!-- 6×6グリッドに変更 -->
+            <div id="enemy-pokemon-list" class="grid grid-cols-6 gap-2 h-96 overflow-y-auto p-2 border rounded-xl bg-slate-50"></div>
+
+            <div class="pagination-controls flex justify-center items-center gap-4 mt-2">
+                <button class="page-btn prev-btn bg-white border rounded px-3 py-1 shadow hover:bg-slate-50">&lt;</button>
+                <span class="page-info font-mono">1 / 10</span>
+                
+            </div>
+        </div>
+
+        <!-- 技構成画面 -->
+        <div id="move-config-screen" class="hidden w-full max-w-6xl p-4 md:p-8 animate-in fade-in duration-500 h-[85vh] flex flex-col bg-white/90 rounded-3xl shadow-xl backdrop-blur-sm">
+            <header class="relative flex items-center justify-center mb-4 shrink-0">
+                <button id="move-config-back-btn" class="absolute left-0 text-slate-500 font-bold hover:text-blue-600">← もどる</button>
+                <h2 class="text-2xl font-black text-[#333]">わざの 設定</h2>
+            </header>
+            <div id="move-config-tabs" class="flex gap-2 justify-center mb-4 shrink-0 overflow-x-auto p-1"></div>
+            <div class="flex-1 flex flex-col md:flex-row gap-4 overflow-hidden">
+                <div class="w-full md:w-1/3 bg-white border border-slate-200 rounded-xl p-4 flex flex-col shadow-sm">
+                    <h3 class="font-bold text-slate-600 mb-3 border-b pb-2">セット中のわざ (最大4つ)</h3>
+                    <div id="current-moves-list" class="flex-1 flex flex-col gap-2"></div>
+                </div>
+                <div class="flex-1 bg-white border border-slate-200 rounded-xl p-4 flex flex-col overflow-hidden shadow-sm">
+                    <h3 class="font-bold text-slate-600 mb-3 border-b pb-2">覚えられるわざ</h3>
+                    <div id="learnable-moves-list" class="flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-2 pr-2"></div>
+                </div>
+            </div>
+            <div class="mt-4 text-center shrink-0">
+                <button id="battle-start-final-btn" class="bg-red-600 hover:bg-red-500 text-white font-black text-xl py-4 px-12 rounded-full shadow-lg transition-transform active:scale-95 animate-pulse">バトル スタート！</button>
+            </div>
+        </div>
+
+        <!-- レベル設定モーダル -->
+        <div id="level-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-[1000] backdrop-blur-sm transition-all duration-300">
+            <div class="bg-white p-8 rounded-3xl border border-slate-200 w-full max-w-md shadow-2xl transform transition-all scale-100">
+                <h2 class="text-2xl font-bold mb-6 text-center text-[#333]">バトルの せってい</h2>
+                <div class="space-y-6 mb-8">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">あなたの レベル</label>
+                        <input type="number" id="player-level-input" value="50" min="1" max="100" class="w-full bg-slate-50 border border-slate-300 text-[#333] p-4 rounded-xl focus:outline-none focus:border-blue-500 font-mono text-lg text-center">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">あいての レベル</label>
+                        <input type="number" id="enemy-level-input" value="50" min="1" max="100" class="w-full bg-slate-50 border border-slate-300 text-[#333] p-4 rounded-xl focus:outline-none focus:border-red-500 font-mono text-lg text-center">
+                    </div>
+                </div>
+                <div class="flex gap-4">
+                    <button type="button" id="modal-cancel-btn" class="flex-1 p-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold border border-slate-300">やめる</button>
+                    <button type="button" id="modal-confirm-btn" class="flex-1 p-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg">次へ (技設定)</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- バトル画面 -->
+            <div id="battle-screen" class="hidden animate-in zoom-in-95 duration-500 h-[calc(100vh-150px)] w-full max-w-[1600px] mx-auto p-2 md:p-4 flex flex-col justify-start gap-4">
+            <div id="battle-top-section" class="battle-top-section w-full grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div class="battle-area flex-1 h-full bg-white border border-slate-200 rounded-2xl overflow-hidden relative shadow-xl flex flex-col">
+                    <div class="flex-1 p-6 relative bg-slate-50 flex flex-col justify-between" style="background-image: radial-gradient(#e2e8f0 1px, transparent 1px); background-size: 20px 20px;">
+                        <!-- 敵エリア -->
+                        <div class="flex justify-between items-start relative z-10">
+                            <div class="w-full md:w-5/12">
+                                <div class="bg-white/90 backdrop-blur-sm p-3 md:p-4 rounded-xl border border-slate-200 border-l-4 border-l-red-500 shadow-sm">
+                                    <div class="flex justify-between items-baseline mb-2">
+                                        <span id="enemy-name" class="font-black text-lg tracking-tight text-[#333]">---</span>
+                                        <span class="text-slate-500 font-bold italic font-mono text-sm">Lv.<span id="enemy-level-display">--</span></span>
+                                    </div>
+                                    <div class="hp-bar-outer w-full bg-slate-200 rounded-full h-2 overflow-hidden border border-slate-300 mb-1">
+                                        <div id="enemy-hp-bar" class="hp-bar-inner bg-gradient-to-r from-red-500 to-orange-500 h-full w-full transition-all duration-500 ease-out"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="absolute right-2 md:right-10 bottom-0 z-0 relative">
+                                <div id="enemy-sprite" class="battle-sprite-container relative"></div>
+                            </div>
+                        </div>
+                        <div class="flex flex-row-reverse justify-between items-start relative z-10 mt-8">
+                            <div class="w-full md:w-5/12">
+                                <div class="bg-white/90 backdrop-blur-sm p-3 md:p-4 rounded-xl border border-slate-200 border-r-4 border-r-blue-500 shadow-sm">
+                                    <div class="flex justify-between items-baseline mb-2">
+                                        <span id="player-name" class="font-black text-lg tracking-tight text-[#333]">---</span>
+                                        <span class="text-slate-500 font-bold italic font-mono text-sm">Lv.<span id="player-level-display">--</span></span>
+                                    </div>
+                                    <div class="hp-bar-outer w-full bg-slate-200 rounded-full h-2 overflow-hidden border border-slate-300 mb-1">
+                                        <div id="player-hp-bar" class="hp-bar-inner bg-gradient-to-r from-blue-500 to-cyan-400 h-full w-full transition-all duration-500 ease-out"></div>
+                                    </div>
+                                    <div class="text-right text-xs mt-1 font-mono text-slate-500"><span id="player-hp-cur">--</span>/<span id="player-hp-max">--</span></div>
+                                </div>
+                            </div>
+                            <div class="absolute left-2 md:left-10 bottom-0 z-0 relative">
+                                <div id="player-sprite" class="battle-sprite-container relative"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="list-column flex flex-col gap-4 h-full">
+                        <div id="side-panel" class="bg-white border border-slate-200 rounded-2xl flex flex-col overflow-hidden shadow-xl h-full">
+                            <div class="flex-1 relative overflow-hidden p-3 flex flex-col justify-center">
+                            <div id="command-menu" class="h-full flex flex-col justify-center gap-2">
+                                <div class="grid grid-cols-2 gap-2 h-full max-h-60">
+                                <div class="cmd-btn border-2 border-slate-200 rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all active:scale-95 relative" data-cmd="tatakau">
+                                    <div class="flex flex-col items-center"><span class="cmd-label text-lg font-bold">たたかう</span><span class="text-xs font-mono text-slate-200">tatakau</span></div>
+                                    <span class="cmd-input font-mono text-slate-200 absolute bottom-1 right-2 text-sm font-bold"></span>
+                                    <span class="cmd-selected-move text-[10px] text-slate-400 mt-1"></span>
+                                </div>
+                                    <div class="cmd-btn border-2 border-slate-200 rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all active:scale-95 relative" data-cmd="dougu">
+                                        <div class="flex flex-col items-center"><span class="cmd-label text-lg font-bold">どうぐ</span><span class="text-xs font-mono text-slate-200">dougu</span></div>
+                                        <span class="cmd-input font-mono text-slate-200 absolute bottom-1 right-2 text-sm font-bold"></span>
+                                    </div>
+                                    <div class="cmd-btn border-2 border-slate-200 rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all active:scale-95 relative" data-cmd="pokemon">
+                                        <div class="flex flex-col items-center"><span class="cmd-label text-lg font-bold">ポケモン</span><span class="text-xs font-mono text-slate-200">pokemon</span></div>
+                                        <span class="cmd-input font-mono text-slate-200 absolute bottom-1 right-2 text-sm font-bold"></span>
+                                    </div>
+                                    <div class="cmd-btn border-2 border-slate-200 rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all active:scale-95 relative" data-cmd="nigeru">
+                                        <div class="flex flex-col items-center"><span class="cmd-label text-lg font-bold">にげる</span><span class="text-xs font-mono text-slate-200">nigeru</span></div>
+                                        <span class="cmd-input font-mono text-slate-200 absolute bottom-1 right-2 text-sm font-bold"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="move-menu" class="hidden absolute inset-0 bg-white z-40 p-4 flex flex-col">
+                                <div class="flex justify-between items-end mb-2 border-b border-slate-200 pb-2">
+                                    <h3 class="text-lg font-bold text-[#333]">わざ</h3>
+                                </div>
+                                <div id="move-list" class="flex-1 flex flex-col gap-2"></div>
+                            </div>
+                            <div id="item-menu" class="hidden absolute inset-0 bg-white z-40 p-4 flex flex-col">
+                                <div class="flex justify-between items-end mb-2 border-b border-slate-200 pb-2">
+                                    <h3 class="text-lg font-bold text-[#333]">どうぐ</h3>
+                                </div>
+                                <div id="item-list" class="flex-1 overflow-y-auto flex flex-col gap-2 pb-2 content-start pr-1"></div>
+                            </div>
+                            <div id="pokemon-menu" class="hidden absolute inset-0 bg-white z-40 p-4 flex flex-col">
+                                <div class="flex justify-between items-end mb-2 border-b border-slate-200 pb-2">
+                                    <h3 id="pokemon-menu-title" class="text-lg font-bold text-[#333]">ポケモン</h3>
+                                </div>
+                                <div id="party-list" class="flex-1 overflow-y-auto flex flex-col gap-2 pb-2 content-start pr-1"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+                <div id="battle-middle-section" class="battle-middle-section w-full grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div id="battle-message-area" class="battle-message-area bg-white/90 border border-slate-200 rounded-2xl p-3 shadow-inner flex items-center justify-start">
+                    <p id="battle-message" class="text-base font-bold text-[#333] tracking-widest typing-cursor text-left">...</p>
+                </div>
+                <div id="typing-panel" class="typing-display-panel hidden bg-white border border-slate-200 rounded-2xl shadow-inner p-4 flex flex-col justify-center items-center space-y-2">
+                    <div id="typing-kana" class="text-2xl font-black text-slate-500">技名</div>
+                    <div id="typing-roman" class="text-3xl font-mono font-bold tracking-widest text-[#333] select-none"></div>
+                </div>
+            </div>
+            <div id="keyboard-column" class="hidden battle-keyboard-section w-full bg-white/90 border border-slate-200 rounded-2xl shadow-xl p-4 max-h-full overflow-hidden">
+                <div id="onscreen-keyboard" class="max-w-full w-full mx-auto flex flex-col gap-1.5 select-none">
+                    <div class="flex justify-center gap-1">
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="1">1</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="2">2</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="3">3</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="4">4</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="5">5</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="6">6</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="7">7</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="8">8</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="9">9</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="0">0</div>
+                    </div>
+                    <div class="flex justify-center gap-1">
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="q">Q</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="w">W</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="e">E</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="r">R</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="t">T</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="y">Y</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="u">U</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="i">I</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="o">O</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="p">P</div>
+                    </div>
+                    <div class="flex justify-center gap-1 pl-2">
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="a">A</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="s">S</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="d">D</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="f">F</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="g">G</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="h">H</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="j">J</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="k">K</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="l">L</div>
+                    </div>
+                    <div class="flex justify-center gap-1 pl-4">
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="z">Z</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="x">X</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="c">C</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="v">V</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="b">B</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="n">N</div>
+                        <div class="kb-key bg-white rounded p-2 flex-1 text-center font-bold shadow active:bg-blue-100" data-key="m">M</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts: assets/js/ フォルダにある小文字のファイル名を指定 -->
+    <script src="assets/js/data-loader.js" onerror="handleScriptError('assets/js/data-loader.js')"></script>
+    <script src="assets/js/typing-engine.js" onerror="handleScriptError('assets/js/typing-engine.js')"></script>
+    <script src="assets/js/type-chart.js" onerror="handleScriptError('assets/js/type-chart.js')"></script>
+    <script src="assets/js/move-utils.js" onerror="handleScriptError('assets/js/move-utils.js')"></script>
+    <script src="assets/js/move-config-screen.js" onerror="handleScriptError('assets/js/move-config-screen.js')"></script>
+    <script src="assets/js/battle-manager.js" onerror="handleScriptError('assets/js/battle-manager.js')"></script>
+    <script src="assets/js/audiomanager.js" onerror="handleScriptError('assets/js/audiomanager.js')"></script>
+    <script src="assets/js/save-manager.js" onerror="handleScriptError('assets/js/save-manager.js')"></script>
+    <script src="assets/js/main.js" onerror="handleScriptError('assets/js/main.js')"></script>
 </body>
 </html>
