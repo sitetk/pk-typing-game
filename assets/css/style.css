@@ -881,6 +881,274 @@ body, html {
     gap: 1rem;
 }
 
+/* --- Story Stage Action Buttons --- */
+.story-stage-action-row {
+    display: flex;
+    justify-content: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.story-stage-action-btn {
+    border: 1px solid rgba(37, 99, 235, 0.3);
+    background: #ffffff;
+    color: #0f172a;
+    border-radius: 999px;
+    padding: 0.65rem 1.25rem;
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: 0 12px 25px rgba(15, 23, 42, 0.1);
+    cursor: pointer;
+}
+
+.story-stage-action-btn:focus-visible,
+.story-stage-action-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 18px 30px rgba(37, 99, 235, 0.25);
+}
+
+.story-stage-action-btn:disabled,
+.story-stage-action-btn.story-stage-action-btn--disabled {
+    border-color: rgba(148, 163, 184, 0.6);
+    color: #94a3b8;
+    background: #f8fafc;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+/* --- GETステージ モーダル --- */
+.get-stage-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem;
+    z-index: 2600;
+}
+
+.get-stage-card {
+    width: min(360px, 90vw);
+    background: #ffffff;
+    border-radius: 1.25rem;
+    padding: 1rem;
+    box-shadow: 0 12px 25px rgba(15, 23, 42, 0.2);
+    border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.get-stage-card-header {
+    margin-bottom: 0.75rem;
+}
+
+.get-stage-card-header h3 {
+    margin: 0;
+    font-size: 1.75rem;
+    line-height: 1.2;
+}
+
+.get-stage-reward-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    max-height: 280px;
+    overflow: hidden;
+}
+
+.get-stage-reward-option,
+.get-stage-reward-summary {
+    border-radius: 1.25rem;
+    border: 1px solid rgba(148, 163, 184, 0.4);
+    padding: 0.85rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    background: #f8fafc;
+    cursor: pointer;
+    transition: border-color 0.2s ease, transform 0.15s ease;
+}
+
+.get-stage-reward-option:hover {
+    border-color: rgba(37, 99, 235, 0.8);
+    transform: translateY(-1px);
+}
+
+.get-stage-reward-option.selected {
+    border-color: rgba(16, 185, 129, 0.9);
+    background: #ecfdf5;
+}
+
+.get-stage-reward-type {
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #0f172a;
+}
+
+.get-stage-reward-name {
+    flex: 1;
+    font-weight: 700;
+    color: #0f172a;
+    text-align: left;
+}
+
+.get-stage-modal .modal-actions {
+    margin-top: 1rem;
+}
+
+/* --- Story Pokemon Box Overlay --- */
+.story-pokemon-box-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    z-index: 2500;
+    backdrop-filter: blur(10px);
+}
+
+.story-pokemon-box-card {
+    width: min(420px, 95vw);
+    max-height: min(80vh, 420px);
+    border-radius: 1.25rem;
+    background: #ffffff;
+    padding: 1rem;
+    box-shadow: 0 20px 40px rgba(15, 23, 42, 0.25);
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    overflow: hidden;
+}
+
+.story-pokemon-box-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.story-pokemon-box-close {
+    border: none;
+    background: rgba(15, 23, 42, 0.04);
+    width: 36px;
+    height: 36px;
+    border-radius: 999px;
+    font-size: 1.25rem;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.story-pokemon-box-close:hover {
+    background: rgba(15, 23, 42, 0.1);
+}
+
+.story-pokemon-party {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.75rem;
+}
+
+.story-pokemon-party-slot {
+    border: 1px solid rgba(148, 163, 184, 0.4);
+    border-radius: 1rem;
+    padding: 0.75rem;
+    background: #f8fafc;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    cursor: pointer;
+    transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.story-pokemon-party-slot.selected {
+    border-color: #0ea5e9;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(14, 165, 233, 0.25);
+    background: #ecfeff;
+}
+
+.story-pokemon-party-slot img {
+    width: 72px;
+    height: 72px;
+    image-rendering: pixelated;
+}
+
+.story-pokemon-party-slot span {
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-align: center;
+}
+
+.story-pokemon-party-slot-placeholder {
+    color: #94a3b8;
+    font-size: 0.75rem;
+}
+
+.story-pokemon-box-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.5rem;
+    max-height: 320px;
+    overflow-y: auto;
+    padding-right: 0.25rem;
+}
+
+.story-pokemon-box-slot {
+    min-height: 110px;
+    border-radius: 1rem;
+    border: 1px dashed rgba(148, 163, 184, 0.7);
+    background: #ffffff;
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    cursor: pointer;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.story-pokemon-box-slot.selected {
+    border-style: solid;
+    border-color: #f97316;
+    box-shadow: 0 6px 15px rgba(249, 115, 22, 0.3);
+}
+
+.story-pokemon-box-slot--empty {
+    background: #f8fafc;
+}
+
+.story-pokemon-box-slot img {
+    width: 56px;
+    height: 56px;
+    image-rendering: pixelated;
+}
+
+.story-pokemon-box-slot-name {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-align: center;
+}
+
+.story-pokemon-box-slot-empty-label {
+    color: #94a3b8;
+    font-size: 0.7rem;
+}
+
+.story-pokemon-box-note {
+    font-size: 0.75rem;
+    color: #475569;
+    text-align: center;
+    margin-top: -0.25rem;
+}
+
 .region-card {
     min-height: 260px;
     border-radius: 1.5rem;
@@ -1043,6 +1311,115 @@ body, html {
 @media (max-width: 1100px) {
     .story-stage-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (min-width: 768px) and (max-width: 1100px) {
+    body {
+        font-size: 0.95rem;
+    }
+
+    .game-container {
+        padding: 6px 10px;
+    }
+
+    #battle-screen {
+        height: calc(100vh - 130px);
+        gap: 0.75rem;
+    }
+
+    #battle-top-section,
+    #battle-middle-section {
+        gap: 0.5rem;
+    }
+
+    .battle-area {
+        padding: clamp(0.75rem, 1.5vw, 1rem);
+    }
+
+    .battle-sprite-img {
+        max-width: 180px;
+        max-height: 150px;
+    }
+
+    #keyboard-column {
+        padding: 6px;
+    }
+
+    .cmd-btn {
+        font-size: 0.85rem;
+    }
+
+    .kb-key {
+        width: 48px !important;
+        height: 38px !important;
+    }
+
+    #custom-party-screen,
+    #enemy-select-screen,
+    #party-select-screen,
+    #story-region-select-screen,
+    #story-stage-screen,
+    #move-config-screen,
+    #title-screen {
+        padding: clamp(0.75rem, 1.3vw, 1rem);
+    }
+
+    .party-card-row,
+    .story-stage-grid,
+    .story-region-grid {
+        gap: clamp(0.8rem, 1.1vw, 1rem);
+    }
+
+    .party-card,
+    .region-card,
+    .story-stage-screen-banner,
+    .story-stage-block,
+    .party-create-card {
+        padding: clamp(0.6rem, 1vw, 0.85rem);
+    }
+
+    .party-card-footer {
+        gap: 0.75rem;
+    }
+
+    .party-card-row .party-card {
+        min-width: 200px;
+        max-width: 240px;
+    }
+
+    .member-slot {
+        height: 60px;
+        font-size: 0.75rem;
+    }
+
+    #custom-pokemon-list,
+    #enemy-pokemon-list {
+        gap: 0.25rem;
+        grid-auto-rows: minmax(70px, auto);
+        padding: 0.35rem;
+        min-height: 380px;
+    }
+
+    .typing-display-panel {
+        min-height: 140px;
+    }
+
+    #mute-btn,
+    #save-to-file-btn {
+        top: auto;
+        bottom: 1rem;
+        padding: 0.45rem 0.75rem;
+        font-size: 0.85rem;
+    }
+
+    #mute-btn {
+        left: 1rem;
+    }
+
+    #save-to-file-btn {
+        right: 1rem;
+        min-width: 120px;
     }
 }
 

@@ -49,6 +49,16 @@ class AudioManager {
     }
 
     /**
+     * ミュート状態を直接設定する
+     * @param {boolean} isMuted
+     */
+    setMuteState(isMuted) {
+        this.isMuted = Boolean(isMuted);
+        this.updateVolume();
+        return this.isMuted;
+    }
+
+    /**
      * 音量を更新する
      */
     updateVolume() {

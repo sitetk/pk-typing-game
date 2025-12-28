@@ -192,22 +192,58 @@
             </div>
 
             <div id="story-stage-screen" class="hidden w-full max-w-4xl p-5 md:p-6 lg:p-8 animate-in fade-in duration-500 bg-white/95 rounded-3xl shadow-2xl backdrop-blur-sm">
-                <header class="relative flex items-center justify-center mb-6">
-                    <button id="story-stage-back-btn" class="absolute left-0 text-slate-500 font-bold hover:text-blue-600">← もどる</button>
-                    <div class="text-center space-y-1">
-                        <p class="text-xs uppercase tracking-[0.4em] text-slate-400">Stage Select</p>
-                        <h2 class="text-3xl font-black text-[#1e293b]">ステージ を えらぶ</h2>
-                    </div>
-                </header>
-                <div class="story-stage-screen-banner border border-slate-200 rounded-2xl overflow-hidden mb-6 flex flex-col md:flex-row gap-4 items-center">
-                    <img src="assets/img/kanto-story-img.png" alt="カントー地方編" class="story-stage-banner-img" id="story-stage-banner-img">
-                    <div class="story-stage-banner-text">
-                        <p id="story-stage-region-label" class="text-xs uppercase tracking-[0.4em] text-slate-400 mb-1">カントー地方編</p>
-                        <h3 id="story-stage-current-name" class="text-2xl font-black text-[#1e293b] mb-1">ステージが ありません</h3>
-                        <p id="story-stage-current-description" class="text-sm text-slate-500">ステージを えらぶと ここに じょうほうが ひょうじされます。</p>
+            <header class="relative flex items-center justify-center mb-6">
+                <button id="story-stage-back-btn" class="absolute left-0 text-slate-500 font-bold hover:text-blue-600">← もどる</button>
+                <div class="text-center space-y-1">
+                    <p class="text-xs uppercase tracking-[0.4em] text-slate-400">Stage Select</p>
+                    <h2 class="text-3xl font-black text-[#1e293b]">ステージ を えらぶ</h2>
+                </div>
+            </header>
+            <div class="story-stage-action-row mb-6">
+                <button id="pokemon-box-btn" class="story-stage-action-btn" disabled>ポケモンボックス</button>
+                <button id="friendly-shop-btn" class="story-stage-action-btn story-stage-action-btn--disabled" disabled>フレンドリィショップ</button>
+            </div>
+            <div class="story-stage-screen-banner border border-slate-200 rounded-2xl overflow-hidden mb-6 flex flex-col md:flex-row gap-4 items-center">
+                <img src="assets/img/kanto-story-img.png" alt="カントー地方編" class="story-stage-banner-img" id="story-stage-banner-img">
+                <div class="story-stage-banner-text">
+                    <p id="story-stage-region-label" class="text-xs uppercase tracking-[0.4em] text-slate-400 mb-1">カントー地方編</p>
+                    <h3 id="story-stage-current-name" class="text-2xl font-black text-[#1e293b] mb-1">ステージが ありません</h3>
+                    <p id="story-stage-current-description" class="text-sm text-slate-500">ステージを えらぶと ここに じょうほうが ひょうじされます。</p>
+                </div>
+            </div>
+            <div class="story-stage-grid" id="story-stage-grid"></div>
+
+            <div id="get-stage-modal" class="get-stage-modal hidden" role="dialog" aria-modal="true" aria-labelledby="get-stage-title">
+                <div class="get-stage-card">
+                    <header class="get-stage-card-header">
+                        <p class="text-xs uppercase tracking-[0.4em] text-slate-400 mb-1">GETステージ</p>
+                        <h3 id="get-stage-title" class="text-2xl font-black text-slate-900 mb-1">ほうびを えらぼう</h3>
+                        <p id="get-stage-description" class="text-sm text-slate-500">ステージの ほうびを うけとります。</p>
+                    </header>
+                    <div id="get-stage-type-label" class="text-xs font-bold uppercase tracking-[0.3em] text-emerald-600 mb-2"></div>
+                    <p id="get-stage-instructions" class="text-sm text-slate-500 mb-4"></p>
+                    <div id="get-stage-reward-list" class="get-stage-reward-list"></div>
+                    <div class="modal-actions mt-6 justify-end gap-3">
+                        <button id="get-stage-cancel-btn" class="btn-secondary px-4 py-2 rounded-full">やめる</button>
+                        <button id="get-stage-confirm-btn" class="px-4 py-2 rounded-full bg-emerald-500 text-white font-bold shadow-lg">うけとる</button>
                     </div>
                 </div>
-            <div class="story-stage-grid" id="story-stage-grid"></div>
+            </div>
+
+            <div id="story-pokemon-box-overlay" class="story-pokemon-box-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="story-pokemon-box-title">
+                <div class="story-pokemon-box-card">
+                    <header class="story-pokemon-box-header">
+                        <div>
+                            <p class="text-xs text-slate-500">てもち & ボックス</p>
+                            <h3 id="story-pokemon-box-title" class="text-xl font-black text-slate-900">ポケモンボックス</h3>
+                        </div>
+                        <button id="story-pokemon-box-close-btn" class="story-pokemon-box-close" aria-label="ポケモンボックスを閉じる">×</button>
+                    </header>
+                    <div id="story-pokemon-party" class="story-pokemon-party" aria-label="てもちポケモン"></div>
+                    <div id="story-pokemon-box-grid" class="story-pokemon-box-grid" aria-label="ボックス格納ポケモン"></div>
+                    <p class="story-pokemon-box-note">ポケモンをタップして えらび、別のマスにタップすると入れかわります。空きマスには そのまま 移動します。</p>
+                </div>
+            </div>
         </div>
 
         <!-- パーティ選択画面 -->

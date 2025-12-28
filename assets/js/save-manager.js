@@ -15,7 +15,8 @@ class SaveManager {
             capturedPokemonIds: [],
             customParties: [],
             currentParty: [],
-            playTime: 0
+            playTime: 0,
+            storyItems: []
         };
     }
 
@@ -105,11 +106,13 @@ class SaveManager {
             lastPlayed: slotData.hasOwnProperty('lastPlayed') ? slotData.lastPlayed : template.lastPlayed,
             clearedStages: Array.isArray(slotData.clearedStages) ? slotData.clearedStages : template.clearedStages,
             defeatedPokemonIds: Array.isArray(slotData.defeatedPokemonIds) ? slotData.defeatedPokemonIds : template.defeatedPokemonIds,
+            capturedPokemonIds: Array.isArray(slotData.capturedPokemonIds) ? slotData.capturedPokemonIds : template.capturedPokemonIds,
             customParties: Array.isArray(slotData.customParties) ? slotData.customParties : template.customParties,
             currentParty: Array.isArray(slotData.currentParty) ? slotData.currentParty : template.currentParty,
             playTime: typeof slotData.playTime === 'number'
                 ? slotData.playTime
-                : Number(slotData.playTime) || template.playTime
+                : Number(slotData.playTime) || template.playTime,
+            storyItems: Array.isArray(slotData.storyItems) ? slotData.storyItems : template.storyItems
         };
     }
 
@@ -121,6 +124,7 @@ class SaveManager {
         if (!Array.isArray(slotData.defeatedPokemonIds)) return false;
         if (!Array.isArray(slotData.capturedPokemonIds)) return false;
         if (!Array.isArray(slotData.customParties)) return false;
+        if (slotData.hasOwnProperty('storyItems') && !Array.isArray(slotData.storyItems)) return false;
         if (!slotData.hasOwnProperty('playTime')) return false;
         const playTime = slotData.playTime;
         if (typeof playTime !== 'number' && Number.isNaN(Number(playTime))) return false;

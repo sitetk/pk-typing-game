@@ -25,10 +25,12 @@ const App = {
     battle: null,
     audio: null,
     moveConfig: null,
+    audioSettingsStorageKey: 'pokemon_typing_audio_settings',
 
     // 定数: 1ページあたり25体 (5列×5行) のポケモンリスト
     ITEMS_PER_PAGE: 25,
     ITEMS_PER_PAGE_CUSTOM: 25,
+    STORY_BOX_CAPACITY: 25,
 
     menuInputBuffer: "",
     itemInputBuffer: "",
@@ -53,6 +55,9 @@ const App = {
     clearedStages: new Set(),
     defeatedPokemonIds: new Set(),
     capturedPokemonIds: new Set(),
+    storyItems: new Set(),
+    getStageModalData: null,
+    selectedGetStageRewardIndex: null,
     currentPage: 1, // 相手選択用ページ
     currentCustomPage: 1, // 自分選択用ページ
     battleCommandLocked: true,
@@ -70,6 +75,10 @@ const App = {
     battleSettings: { playerLevel: 50, enemyLevel: 50 },
     commandList: ['tatakau', 'dougu', 'pokemon', 'nigeru'],
     isFirstBattle: true,
+    storyPartySlots: Array.from({ length: 6 }, () => null),
+    storyBoxSlots: [],
+    storyPokemonBoxSelection: null,
+    storyPartyInitialized: false,
 
 // プリセットパーティ
     presetParties: [
@@ -97,6 +106,7 @@ const App = {
         this.typing = new TypingEngine();
         this.audio = new AudioManager();
         this.saveManager = new SaveManager();
+        this.loadAudioPreferences();
 
         try {
             await this.loader.load();
@@ -128,6 +138,8 @@ const App = {
             startPanel: document.getElementById('start-panel'),
             gameStartBtn: document.getElementById('game-start-btn'),
             modeBtns: document.querySelectorAll('.mode-btn'),
+            muteBtn: document.getElementById('mute-btn'),
+            muteIcon: document.getElementById('mute-icon'),
             partyGrid: document.getElementById('party-grid'),
             playerLevelInput: document.getElementById('player-level-input'),
             enemyLevelInput: document.getElementById('enemy-level-input'),
@@ -195,7 +207,21 @@ const App = {
             storyStageBackBtn: document.getElementById('story-stage-back-btn'),
             storyStageTitle: document.getElementById('story-stage-current-name'),
             storyStageDesc: document.getElementById('story-stage-current-description'),
-            storyStageBannerImage: document.getElementById('story-stage-banner-img')
+            storyStageBannerImage: document.getElementById('story-stage-banner-img'),
+            pokemonBoxBtn: document.getElementById('pokemon-box-btn'),
+            friendlyShopBtn: document.getElementById('friendly-shop-btn'),
+            storyPokemonBoxOverlay: document.getElementById('story-pokemon-box-overlay'),
+            storyPokemonBoxCloseBtn: document.getElementById('story-pokemon-box-close-btn'),
+            storyPokemonParty: document.getElementById('story-pokemon-party'),
+            storyPokemonBoxGrid: document.getElementById('story-pokemon-box-grid'),
+            getStageModal: document.getElementById('get-stage-modal'),
+            getStageTitle: document.getElementById('get-stage-title'),
+            getStageDescription: document.getElementById('get-stage-description'),
+            getStageInstructions: document.getElementById('get-stage-instructions'),
+            getStageRewardList: document.getElementById('get-stage-reward-list'),
+            getStageConfirmBtn: document.getElementById('get-stage-confirm-btn'),
+            getStageCancelBtn: document.getElementById('get-stage-cancel-btn'),
+            getStageTypeLabel: document.getElementById('get-stage-type-label')
         };
     },
 
@@ -221,6 +247,9 @@ const App = {
             });
         }
         if (this.dom.importCancelBtn) this.dom.importCancelBtn.onclick = () => this.cancelImport();
+        if (this.dom.muteBtn) {
+            this.dom.muteBtn.onclick = () => this.handleMuteButtonClick();
+        }
 
         // 戻るボタン
         document.getElementById('party-back-btn').onclick = () => this.showModeSelectScreen();
@@ -284,6 +313,66 @@ const App = {
                 this.audio.playSe('select');
                 this.showStoryRegionSelectScreen();
             };
+        }
+
+        if (this.dom.getStageConfirmBtn) this.dom.getStageConfirmBtn.onclick = () => this.confirmGetStageReward();
+        if (this.dom.getStageCancelBtn) this.dom.getStageCancelBtn.onclick = () => this.closeGetStageModal();
+
+        if (this.dom.pokemonBoxBtn) {
+            this.dom.pokemonBoxBtn.onclick = () => this.openPokemonBoxOverlay();
+        }
+        if (this.dom.storyPokemonBoxCloseBtn) {
+            this.dom.storyPokemonBoxCloseBtn.onclick = () => this.closePokemonBoxOverlay();
+        }
+        if (this.dom.storyPokemonBoxOverlay) {
+            this.dom.storyPokemonBoxOverlay.addEventListener('click', (e) => {
+                if (e.target === this.dom.storyPokemonBoxOverlay) this.closePokemonBoxOverlay();
+            });
+        }
+    },
+
+    handleMuteButtonClick() {
+        if (!this.audio) return;
+        const isMuted = this.audio.toggleMute();
+        this.updateMuteButtonState(isMuted);
+        this.saveAudioPreferences(isMuted);
+    },
+
+    updateMuteButtonState(isMuted) {
+        const btn = this.dom.muteBtn;
+        if (!btn) return;
+        const icon = this.dom.muteIcon;
+        if (icon) icon.textContent = isMuted ? '🔇' : '🔊';
+        btn.setAttribute('aria-pressed', isMuted ? 'true' : 'false');
+        btn.title = isMuted ? '音声をオンにする' : '音声をミュート';
+    },
+
+    loadAudioPreferences() {
+        if (!this.audio) return;
+        let isMuted = false;
+        try {
+            const raw = localStorage.getItem(this.audioSettingsStorageKey);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                isMuted = Boolean(parsed.isMuted);
+            }
+        } catch (err) {
+            console.error('音声設定の読み込みに失敗しました', err);
+        }
+        if (typeof this.audio.setMuteState === 'function') {
+            this.audio.setMuteState(isMuted);
+        } else {
+            this.audio.isMuted = isMuted;
+            this.audio.updateVolume();
+        }
+        this.updateMuteButtonState(isMuted);
+    },
+
+    saveAudioPreferences(isMuted) {
+        try {
+            localStorage.setItem(this.audioSettingsStorageKey, JSON.stringify({ isMuted: Boolean(isMuted) }));
+        } catch (err) {
+            console.error('音声設定の保存に失敗しました', err);
         }
     },
 
@@ -398,6 +487,7 @@ const App = {
         this.currentSlotId = slotId;
         this.defeatedPokemonIds = new Set(slotData.defeatedPokemonIds || []);
         this.capturedPokemonIds = new Set(slotData.capturedPokemonIds || []);
+        this.storyItems = new Set(slotData.storyItems || []);
         this.clearedStages = new Set(slotData.clearedStages || []);
         this.setActiveSlotFromData(slotData);
         if (this.isSlotEmpty(slotData)) {
@@ -405,7 +495,8 @@ const App = {
             this.openNameInputModal();
             return;
         }
-        this.setActiveSlotFromData(slotData);
+        this.updateStoryBoxSlots();
+        this.updatePokemonBoxButtonState();
         this.audio.playSe('select');
         this.renderSaveSlots(this.saveManager.loadAll());
         this.showModeSelectScreen();
@@ -471,7 +562,8 @@ const App = {
             defeatedPokemonIds: [],
             customParties: [],
             currentParty: [],
-            playTime: 0
+            playTime: 0,
+            storyItems: []
         };
         this.saveManager.saveSlot(slotId, slotPayload);
         this.setActiveSlotFromData({ playerName: value, playTime: 0 });
@@ -560,9 +652,15 @@ const App = {
         const regionDef = STORY_REGIONS[region] || STORY_REGIONS.DEFAULT;
         this.storyRegionDisplayName = regionDef.label;
         this.storyRegionImageUrl = regionDef.image;
+        const visibleStages = this.buildStoryStageTiles();
+        this.showStoryStageScreen(visibleStages);
+    },
+
+    buildStoryStageTiles() {
+        const regionDef = STORY_REGIONS[this.storyRegion] || STORY_REGIONS.DEFAULT;
         const allStages = this.loader.stageList || [];
         const stageIds = regionDef.stageIds || allStages.map(stage => stage.id);
-        const targeted = stageIds.map((id, index) => {
+        return stageIds.map((id, index) => {
             const found = allStages.find(stage => stage.id === id);
             if (!found) return null;
             const prevStageId = stageIds[index - 1];
@@ -573,11 +671,23 @@ const App = {
                 previewText: index === 0 ? 'stage01' : ''
             };
         }).filter(Boolean);
-        const visibleStages = targeted.length ? targeted : allStages.map((stage, index) => ({
-            ...stage,
-            isLocked: index > 0 && !this.clearedStages.has(allStages[index - 1]?.id)
-        }));
-        this.showStoryStageScreen(visibleStages);
+    },
+
+    buildStoryStageTiles() {
+        const regionDef = STORY_REGIONS[this.storyRegion] || STORY_REGIONS.DEFAULT;
+        const allStages = this.loader.stageList || [];
+        const stageIds = regionDef.stageIds || allStages.map(stage => stage.id);
+        return stageIds.map((id, index) => {
+            const found = allStages.find(stage => stage.id === id);
+            if (!found) return null;
+            const prevStageId = stageIds[index - 1];
+            const isLocked = index > 0 && prevStageId && !this.clearedStages.has(prevStageId);
+            return {
+                ...found,
+                isLocked,
+                previewText: index === 0 ? 'stage01' : ''
+            };
+        }).filter(Boolean);
     },
 
     showPartySelectScreen(logHistory = true) {
@@ -618,20 +728,35 @@ const App = {
         }
         this.recordScreen('story-stage-select');
         if (firstStage) {
-            this.handleStoryStageSelect(firstStage.id);
+            this.handleStoryStageSelect(firstStage.id, { openModal: false });
         }
+        this.updateStoryBoxSlots();
+        this.updatePokemonBoxButtonState();
+        this.updateGetStageButtonState();
     },
 
-    handleStoryStageSelect(stageId) {
+    handleStoryStageSelect(stageId, { openModal = true } = {}) {
         if (!stageId || !this.storyStageList.length || !this.dom.storyStageGrid) return;
         const stage = this.storyStageList.find(s => s.id === stageId);
         if (!stage) return;
+        const reward = this.loader.getStageReward(stageId);
+        this.getStageModalData = reward;
+        this.selectedGetStageRewardIndex = null;
         this.storySelectedStageId = stageId;
         if (this.dom.storyStageTitle) this.dom.storyStageTitle.textContent = stage.name;
         if (this.dom.storyStageDesc) this.dom.storyStageDesc.textContent = stage.description;
         this.dom.storyStageGrid.querySelectorAll('.story-stage-block').forEach(block => {
             block.classList.toggle('selected', block.dataset.stageId === stageId);
         });
+        this.updateGetStageButtonState();
+
+        const stageType = (stage.type || '').toUpperCase();
+        const hasReward = Boolean(reward && reward.rewardSlots && reward.rewardSlots.length);
+        const alreadyClaimed = reward && this.hasCollectedStage(reward.stageId);
+        const canOpenGetModal = stageType === 'GET' && hasReward && !stage.isLocked && !alreadyClaimed;
+        if (canOpenGetModal && openModal) {
+            this.handleGetStageButtonClick();
+        }
     },
 
     renderStoryStages(stages = []) {
@@ -665,6 +790,309 @@ const App = {
         this.dom.storyStageGrid.querySelectorAll('.story-stage-block').forEach(block => {
             block.onclick = () => this.handleStoryStageSelect(block.dataset.stageId);
         });
+    },
+
+    saveStoryProgress() {
+        this.saveManager.saveSlot(this.currentSlotId, {
+            clearedStages: Array.from(this.clearedStages),
+            defeatedPokemonIds: Array.from(this.defeatedPokemonIds),
+            capturedPokemonIds: Array.from(this.capturedPokemonIds),
+            storyItems: Array.from(this.storyItems),
+            lastPlayed: Date.now()
+        });
+    },
+
+    updateGetStageButtonState() {
+        const btn = this.dom.getStageBtn;
+        if (!btn) return;
+        const reward = this.getStageModalData;
+        const stage = this.storyStageList.find(s => s.id === this.storySelectedStageId);
+        const hasReward = Boolean(reward && reward.rewardSlots && reward.rewardSlots.length);
+        const unlocked = stage && !stage.isLocked;
+        const alreadyClaimed = reward && this.hasCollectedStage(reward.stageId);
+        const canCollect = hasReward && unlocked && !alreadyClaimed;
+        btn.disabled = !canCollect;
+        btn.classList.toggle('story-stage-action-btn--disabled', !canCollect);
+    },
+
+    updateGetStageModalContent() {
+        const data = this.getStageModalData;
+        if (!data || !this.dom.getStageModal) return;
+        this.dom.getStageTitle.textContent = data.stageName || 'GETステージ';
+        this.dom.getStageDescription.textContent = data.stageName ? `${data.stageName} の ほうび` : 'ステージの ほうびを うけとります。';
+        const instructions = data.getMode === 'ONE'
+            ? '複数あるなかから ひとつ えらびます。'
+            : 'ぜんぶ うけとります。';
+        this.dom.getStageInstructions.textContent = instructions;
+        this.dom.getStageTypeLabel.textContent = data.getMode;
+        this.dom.getStageConfirmBtn.disabled = !data.rewardSlots.length;
+        this.renderGetStageRewards();
+    },
+
+    renderGetStageRewards() {
+        const data = this.getStageModalData;
+        if (!data || !this.dom.getStageRewardList) return;
+        if (!data.rewardSlots.length) {
+            this.dom.getStageRewardList.innerHTML = '<p class="text-sm text-slate-500">ほうびは まだ ありません。</p>';
+            return;
+        }
+        if (data.getMode === 'ONE') {
+            const html = data.rewardSlots.map((slot, idx) => {
+                const selected = this.selectedGetStageRewardIndex === idx;
+                const level = slot.level ? `Lv.${slot.level}` : '';
+                return `
+                    <button type="button" class="get-stage-reward-option${selected ? ' selected' : ''}" data-index="${idx}">
+                        <span class="get-stage-reward-type">${slot.type === 'POKEMON' ? 'ポケモン' : 'どうぐ'}</span>
+                        <span class="get-stage-reward-name">${slot.name}</span>
+                        <span class="text-xs text-slate-500">${level}</span>
+                    </button>
+                `;
+            }).join('');
+            this.dom.getStageRewardList.innerHTML = html;
+            const buttons = this.dom.getStageRewardList.querySelectorAll('.get-stage-reward-option');
+            buttons.forEach(button => {
+                button.onclick = () => {
+                    this.selectedGetStageRewardIndex = Number(button.dataset.index);
+                    this.renderGetStageRewards();
+                };
+            });
+        } else {
+            const html = data.rewardSlots.map(slot => {
+                const level = slot.level ? `Lv.${slot.level}` : '';
+                return `
+                    <div class="get-stage-reward-summary">
+                        <span class="get-stage-reward-type">${slot.type === 'POKEMON' ? 'ポケモン' : 'どうぐ'}</span>
+                        <span class="get-stage-reward-name">${slot.name}</span>
+                        <span class="text-xs text-slate-500">${level}</span>
+                    </div>
+                `;
+            }).join('');
+            this.dom.getStageRewardList.innerHTML = html;
+        }
+    },
+
+    handleGetStageButtonClick() {
+        const reward = this.getStageModalData;
+        if (!reward) return;
+        this.selectedGetStageRewardIndex = reward.getMode === 'ONE' ? 0 : null;
+        this.updateGetStageModalContent();
+        this.dom.getStageModal.classList.remove('hidden');
+    },
+
+    closeGetStageModal() {
+        if (!this.dom.getStageModal) return;
+        this.dom.getStageModal.classList.add('hidden');
+        this.getStageModalData = this.getStageModalData; // keep selection
+    },
+
+    confirmGetStageReward() {
+        const reward = this.getStageModalData;
+        if (!reward || !reward.rewardSlots.length) return;
+        const slots = reward.getMode === 'ONE'
+            ? [reward.rewardSlots[this.selectedGetStageRewardIndex ?? 0] || reward.rewardSlots[0]]
+            : reward.rewardSlots;
+        slots.forEach(slot => this.applyGetStageReward(slot));
+        this.storyItems.add(reward.stageId);
+        this.clearedStages.add(reward.stageId);
+        this.saveStoryProgress();
+        alert(`ステージ ${reward.stageName} の ほうびを うけとった！`);
+        this.closeGetStageModal();
+        this.updateStoryBoxSlots();
+        this.updatePokemonBoxButtonState();
+        this.updateGetStageButtonState();
+    },
+
+    applyGetStageReward(slot) {
+        if (!slot || !slot.type) return;
+        if (slot.type === 'POKEMON') {
+            const pokemon = this.loader.getPokemonDetails(slot.name);
+            if (pokemon) {
+                this.markCapturedPokemon(String(pokemon['図鑑No']));
+            }
+        } else if (slot.type === 'ITEM') {
+            alert(`${slot.name} を てにいれた！`);
+        }
+    },
+
+    saveStoryProgress() {
+        this.saveManager.saveSlot(this.currentSlotId, {
+            clearedStages: Array.from(this.clearedStages),
+            defeatedPokemonIds: Array.from(this.defeatedPokemonIds),
+            capturedPokemonIds: Array.from(this.capturedPokemonIds),
+            storyItems: Array.from(this.storyItems),
+            lastPlayed: Date.now()
+        });
+    },
+
+    hasCollectedStage(stageId) {
+        return this.storyItems.has(stageId);
+    },
+
+    updateStoryBoxSlots(forcePartyReset = false) {
+        const capturedDetails = Array.from(this.capturedPokemonIds)
+            .map(id => this.loader.getPokemonDetails(id))
+            .filter(Boolean)
+            .sort((a, b) => Number(a['図鑑No']) - Number(b['図鑑No']));
+        const seen = new Set();
+        const slotList = [];
+        capturedDetails.forEach(pk => {
+            const dexNo = String(pk['図鑑No']);
+            if (seen.has(dexNo)) return;
+            seen.add(dexNo);
+            slotList.push({
+                id: dexNo,
+                name: pk['名前（日本語）'],
+                sprite: this.getSpriteUrl(dexNo)
+            });
+        });
+        this.storyBoxSlots = slotList.slice(0, this.STORY_BOX_CAPACITY);
+        while (this.storyBoxSlots.length < this.STORY_BOX_CAPACITY) {
+            this.storyBoxSlots.push(null);
+        }
+
+        if (!this.storyPartyInitialized || forcePartyReset) {
+            this.storyPartySlots = this.storyBoxSlots.slice(0, 6).map(slot => (slot ? slot.id : null));
+            while (this.storyPartySlots.length < 6) this.storyPartySlots.push(null);
+            this.storyPartyInitialized = true;
+        } else {
+            this.storyPartySlots = this.storyPartySlots.map(id => {
+                if (!id) return null;
+                return this.storyBoxSlots.some(slot => slot && slot.id === id) ? id : null;
+            });
+            while (this.storyPartySlots.length < 6) this.storyPartySlots.push(null);
+        }
+    },
+
+    updatePokemonBoxButtonState() {
+        if (!this.dom.pokemonBoxBtn) return;
+        const hasCaptured = this.capturedPokemonIds.size > 0;
+        this.dom.pokemonBoxBtn.disabled = !hasCaptured;
+        if (hasCaptured) {
+            this.dom.pokemonBoxBtn.classList.remove('story-stage-action-btn--disabled');
+        } else {
+            this.dom.pokemonBoxBtn.classList.add('story-stage-action-btn--disabled');
+        }
+    },
+
+    openPokemonBoxOverlay() {
+        if (!this.dom.storyPokemonBoxOverlay || this.dom.pokemonBoxBtn?.disabled) return;
+        this.updateStoryBoxSlots();
+        this.storyPokemonBoxSelection = null;
+        this.renderStoryPokemonParty();
+        this.renderStoryPokemonBox();
+        this.dom.storyPokemonBoxOverlay.classList.remove('hidden');
+    },
+
+    closePokemonBoxOverlay() {
+        if (!this.dom.storyPokemonBoxOverlay) return;
+        this.dom.storyPokemonBoxOverlay.classList.add('hidden');
+        this.storyPokemonBoxSelection = null;
+    },
+
+    renderStoryPokemonParty() {
+        if (!this.dom.storyPokemonParty) return;
+        const html = this.storyPartySlots.map((id, index) => {
+            const pokemon = id ? this.loader.getPokemonDetails(id) : null;
+            const isSelected = this.storyPokemonBoxSelection?.type === 'party' && this.storyPokemonBoxSelection?.index === index;
+            return `
+                <button type="button"
+                    class="story-pokemon-party-slot${!pokemon ? ' story-pokemon-party-slot-placeholder' : ''}${isSelected ? ' selected' : ''}"
+                    data-type="party"
+                    data-index="${index}"
+                    data-id="${pokemon ? pokemon['図鑑No'] : ''}"
+                    aria-label="${pokemon ? pokemon['名前（日本語）'] : `${index + 1}ぴきめ`}"
+                >
+                    ${pokemon ? `<img src="${this.getSpriteUrl(pokemon['図鑑No'])}" alt="${pokemon['名前（日本語）']}" class="pixel-art">` : ''}
+                    <span>${pokemon ? pokemon['名前（日本語）'] : `${index + 1}ぴきめ`}</span>
+                </button>
+            `;
+        }).join('');
+        this.dom.storyPokemonParty.innerHTML = html;
+        this.dom.storyPokemonParty.querySelectorAll('button').forEach(button => {
+            button.onclick = () => this.handleStoryPokemonSlotClick('party', Number(button.dataset.index));
+        });
+    },
+
+    renderStoryPokemonBox() {
+        if (!this.dom.storyPokemonBoxGrid) return;
+        const html = this.storyBoxSlots.map((slot, index) => {
+            const isSelected = this.storyPokemonBoxSelection?.type === 'box' && this.storyPokemonBoxSelection?.index === index;
+            const hasPokemon = Boolean(slot && slot.id);
+            return `
+                <button type="button"
+                    class="story-pokemon-box-slot${isSelected ? ' selected' : ''}${!hasPokemon ? ' story-pokemon-box-slot--empty' : ''}"
+                    data-type="box"
+                    data-index="${index}"
+                    data-id="${hasPokemon ? slot.id : ''}"
+                    aria-label="${hasPokemon ? slot.name : '空きスロット'}"
+                >
+                    ${hasPokemon ? `<img src="${slot.sprite}" alt="${slot.name}" class="pixel-art">` : ''}
+                    <span class="story-pokemon-box-slot-name">${hasPokemon ? slot.name : ''}</span>
+                    ${!hasPokemon ? '<span class="story-pokemon-box-slot-empty-label">empty</span>' : ''}
+                </button>
+            `;
+        }).join('');
+        this.dom.storyPokemonBoxGrid.innerHTML = html;
+        this.dom.storyPokemonBoxGrid.querySelectorAll('button').forEach(button => {
+            button.onclick = () => this.handleStoryPokemonSlotClick('box', Number(button.dataset.index));
+        });
+    },
+
+    handleStoryPokemonSlotClick(type, index) {
+        if (type !== 'party' && type !== 'box') return;
+        const previous = this.storyPokemonBoxSelection;
+        if (previous && previous.type === type && previous.index === index) {
+            this.storyPokemonBoxSelection = null;
+            this.renderStoryPokemonParty();
+            this.renderStoryPokemonBox();
+            return;
+        }
+        if (!previous || previous.type === type) {
+            this.storyPokemonBoxSelection = { type, index };
+            this.renderStoryPokemonParty();
+            this.renderStoryPokemonBox();
+            return;
+        }
+        this.swapStoryPokemonSlots(previous, { type, index });
+        this.storyPokemonBoxSelection = null;
+        this.renderStoryPokemonParty();
+        this.renderStoryPokemonBox();
+    },
+
+    swapStoryPokemonSlots(a, b) {
+        if (!a || !b) return;
+        const getId = (slot) => slot.type === 'party'
+            ? this.storyPartySlots[slot.index]
+            : this.storyBoxSlots[slot.index]?.id;
+        const setId = (slot, id) => {
+            if (slot.type === 'party') {
+                this.storyPartySlots[slot.index] = id || null;
+            } else {
+                this.setStoryBoxSlot(slot.index, id);
+            }
+        };
+        const aId = getId(a);
+        const bId = getId(b);
+        setId(a, bId);
+        setId(b, aId);
+    },
+
+    setStoryBoxSlot(index, id) {
+        if (index < 0 || index >= this.STORY_BOX_CAPACITY) return;
+        if (!id) {
+            this.storyBoxSlots[index] = null;
+            return;
+        }
+        const pokemon = this.loader.getPokemonDetails(id);
+        if (!pokemon) {
+            this.storyBoxSlots[index] = null;
+            return;
+        }
+        this.storyBoxSlots[index] = {
+            id: String(pokemon['図鑑No']),
+            name: pokemon['名前（日本語）'],
+            sprite: this.getSpriteUrl(pokemon['図鑑No'])
+        };
     },
 
     attachStoryRegionCardHandlers() {
@@ -904,6 +1332,8 @@ const App = {
             capturedPokemonIds: Array.from(this.capturedPokemonIds),
             lastPlayed: Date.now()
         });
+        this.updateStoryBoxSlots();
+        this.updatePokemonBoxButtonState();
     },
 
     handleCustomPartyConfirm() {

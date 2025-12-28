@@ -11,6 +11,7 @@ class DataLoader {
         this.stageList = [];
         this.wildEncounterList = [];
         this.trainerList = [];
+        this.getStageRewards = [];
     }
 
     async fetchCSV(url) {
@@ -68,14 +69,15 @@ class DataLoader {
 
     async load() {
         try {
-            const [pkRaw, skillRaw, moveRaw, itemRaw, stageRaw, wildRaw, trainerRaw] = await Promise.all([
+            const [pkRaw, skillRaw, moveRaw, itemRaw, stageRaw, wildRaw, trainerRaw, getStageRaw] = await Promise.all([
                 this.fetchCSV('assets/data/pk-list.csv'),
                 this.fetchCSV('assets/data/skill-list.csv'),
                 this.fetchCSV('assets/data/move-list.csv'),
                 this.fetchCSV('assets/data/item-list.csv'),
                 this.fetchCSV('assets/data/stage-list.csv'),
                 this.fetchCSV('assets/data/wild-encounter.csv'),
-                this.fetchCSV('assets/data/trainer-list.csv')
+                this.fetchCSV('assets/data/trainer-list.csv'),
+                this.fetchCSV('assets/data/get_stage_rewards.csv')
             ]);
 
             const baseFormMap = new Map();
@@ -99,6 +101,7 @@ class DataLoader {
             this.stageList = stageRaw;
             this.wildEncounterList = wildRaw;
             this.trainerList = trainerRaw;
+            this.getStageRewards = this.normalizeGetStageRewards(getStageRaw);
 
             // 技データのマッピング
             this.moveDataMap.clear();
@@ -115,12 +118,39 @@ class DataLoader {
                 items: this.itemList,
                 stages: this.stageList,
                 wilds: this.wildEncounterList,
-                trainers: this.trainerList
+                trainers: this.trainerList,
+                getStageRewards: this.getStageRewards
             };
         } catch (e) {
             console.error("[DataLoader] Critical Load Error", e);
             throw e; 
         }
+    }
+
+    normalizeGetStageRewards(raw = []) {
+        if (!Array.isArray(raw)) return [];
+        const sanitize = (value) => (value || '').toString().trim();
+        return raw.map(row => {
+            const entries = [1, 2, 3].map(idx => {
+                const type = sanitize(row[`type_${idx}`]).toUpperCase();
+                const name = sanitize(row[`reward_name_${idx}`]);
+                const levelRaw = sanitize(row[`reward_level_${idx}`]);
+                if (!type || !name) return null;
+                const level = levelRaw ? Number(levelRaw) : null;
+                return { type, name, level };
+            }).filter(Boolean);
+            return {
+                stageId: sanitize(row.stage_id),
+                stageName: sanitize(row.stage_name),
+                getMode: sanitize(row.get_mode).toUpperCase() || 'ALL',
+                rewardSlots: entries
+            };
+        }).filter(entry => entry.stageId && entry.rewardSlots.length);
+    }
+
+    getStageReward(stageId) {
+        if (!stageId) return null;
+        return this.getStageRewards.find(entry => entry.stageId === stageId) || null;
     }
 
     getPokemonDetails(idOrName) {
