@@ -576,6 +576,13 @@ const App = {
 
     handleSaveToFile() {
         try {
+            this.saveManager.saveSlot(this.currentSlotId, {
+                defeatedPokemonIds: Array.from(this.defeatedPokemonIds),
+                capturedPokemonIds: Array.from(this.capturedPokemonIds),
+                clearedStages: Array.from(this.clearedStages),
+                storyItems: Array.from(this.storyItems),
+                lastPlayed: Date.now()
+            });
             this.saveManager.saveToFile(this.currentSlotId);
         } catch (err) {
             alert(err.message || 'ファイルへのセーブに しっぱいしました。');
