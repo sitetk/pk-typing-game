@@ -79,6 +79,17 @@ const App = {
     storyBoxSlots: [],
     storyPokemonBoxSelection: null,
     storyPartyInitialized: false,
+    modalLockCount: 0,
+    modalScrollPosition: 0,
+    storyCapturedPokemonIds: new Set(),
+    storyOwnedPokemonDetails: [],
+    storyBoxViewActive: false,
+    storyCollectionInitialized: false,
+    enemySelectTitleDefault: 'あいてのポケモンをえらぶ',
+    enemySelectBackDefaultText: '',
+    enemySelectConfirmDefaultText: '',
+    enemySelectBackDefaultHandler: null,
+    enemySelectConfirmDefaultHandler: null,
 
 // プリセットパーティ
     presetParties: [
@@ -254,11 +265,22 @@ const App = {
         // 戻るボタン
         document.getElementById('party-back-btn').onclick = () => this.showModeSelectScreen();
         document.getElementById('custom-back-btn').onclick = () => this.showPartySelectScreen();
-        document.getElementById('enemy-select-back-btn').onclick = () => this.showPartySelectScreen();
+        const enemySelectBackBtn = document.getElementById('enemy-select-back-btn');
+        if (enemySelectBackBtn) {
+            const enemyBackHandler = () => this.showPartySelectScreen();
+            enemySelectBackBtn.onclick = enemyBackHandler;
+            this.enemySelectBackDefaultHandler = enemyBackHandler;
+            this.enemySelectBackDefaultText = enemySelectBackBtn.textContent;
+        }
 
         // 決定ボタン
         this.dom.customConfirmBtn.onclick = () => this.handleCustomPartyConfirm();
-        this.dom.enemyConfirmBtn.onclick = () => this.showLevelModal();
+        if (this.dom.enemyConfirmBtn) {
+            const enemyConfirmHandler = () => this.showLevelModal();
+            this.dom.enemyConfirmBtn.onclick = enemyConfirmHandler;
+            this.enemySelectConfirmDefaultHandler = enemyConfirmHandler;
+            this.enemySelectConfirmDefaultText = this.dom.enemyConfirmBtn.textContent;
+        }
         document.getElementById('modal-confirm-btn').onclick = () => this.handleLevelConfirm();
         document.getElementById('modal-cancel-btn').onclick = () => this.dom.levelModal.classList.add('hidden');
         document.getElementById('battle-start-final-btn').onclick = () => this.handleFinalBattleStart();
@@ -712,10 +734,23 @@ const App = {
         if (this.dom.storyRegionSelectScreen) this.dom.storyRegionSelectScreen.classList.remove('hidden');
         if (this.dom.storyStageScreen) this.dom.storyStageScreen.classList.add('hidden');
         this.attachStoryRegionCardHandlers();
+        this.storyCollectionInitialized = false;
         if (logHistory) this.recordScreen('story-region-select');
     },
 
+    resetStoryCapturedCollections() {
+        this.storyOwnedPokemonDetails = [];
+        this.storyPartySlots = Array.from({ length: 6 }, () => null);
+        this.storyBoxSlots = [];
+        this.storyPokemonBoxSelection = null;
+        this.storyPartyInitialized = false;
+        this.storyBoxViewActive = false;
+        this.storyCapturedPokemonIds.clear();
+    },
+
     showStoryStageScreen(stages = []) {
+        this.resetStoryCapturedCollections();
+        this.storyCollectionInitialized = true;
         const maxStageTiles = 48;
         const displayStages = Array.isArray(stages) ? stages.slice(0, maxStageTiles) : [];
         this.storyStageList = displayStages;
@@ -883,12 +918,12 @@ const App = {
         if (!reward) return;
         this.selectedGetStageRewardIndex = reward.getMode === 'ONE' ? 0 : null;
         this.updateGetStageModalContent();
-        this.dom.getStageModal.classList.remove('hidden');
+        this.showFloatingModal(this.dom.getStageModal);
     },
 
     closeGetStageModal() {
         if (!this.dom.getStageModal) return;
-        this.dom.getStageModal.classList.add('hidden');
+        this.hideFloatingModal(this.dom.getStageModal);
         this.getStageModalData = this.getStageModalData; // keep selection
     },
 
@@ -936,38 +971,62 @@ const App = {
     },
 
     updateStoryBoxSlots(forcePartyReset = false) {
-        const capturedDetails = Array.from(this.capturedPokemonIds)
-            .map(id => this.loader.getPokemonDetails(id))
-            .filter(Boolean)
-            .sort((a, b) => Number(a['図鑑No']) - Number(b['図鑑No']));
-        const seen = new Set();
-        const slotList = [];
-        capturedDetails.forEach(pk => {
+        const slotList = this.storyOwnedPokemonDetails.map(pk => {
             const dexNo = String(pk['図鑑No']);
-            if (seen.has(dexNo)) return;
-            seen.add(dexNo);
-            slotList.push({
+            return {
                 id: dexNo,
                 name: pk['名前（日本語）'],
                 sprite: this.getSpriteUrl(dexNo)
-            });
+            };
         });
         this.storyBoxSlots = slotList.slice(0, this.STORY_BOX_CAPACITY);
         while (this.storyBoxSlots.length < this.STORY_BOX_CAPACITY) {
             this.storyBoxSlots.push(null);
         }
 
+        const availableIds = Array.from(new Set(this.storyBoxSlots
+            .filter(slot => slot && slot.id)
+            .map(slot => slot.id)
+        ));
+
         if (!this.storyPartyInitialized || forcePartyReset) {
-            this.storyPartySlots = this.storyBoxSlots.slice(0, 6).map(slot => (slot ? slot.id : null));
-            while (this.storyPartySlots.length < 6) this.storyPartySlots.push(null);
+            this.redistributeStoryParty(availableIds);
             this.storyPartyInitialized = true;
         } else {
             this.storyPartySlots = this.storyPartySlots.map(id => {
                 if (!id) return null;
                 return this.storyBoxSlots.some(slot => slot && slot.id === id) ? id : null;
             });
+            let fillable = availableIds.filter(id => id && !this.storyPartySlots.includes(id));
+            this.storyPartySlots = this.storyPartySlots.map(id => {
+                if (id) return id;
+                return fillable.shift() || null;
+            });
             while (this.storyPartySlots.length < 6) this.storyPartySlots.push(null);
         }
+
+        if (this.storyBoxViewActive) {
+            this.renderStoryBoxList();
+        }
+    },
+
+    redistributeStoryParty(availableIds = null) {
+        const partySize = 6;
+        const ids = Array.from(new Set((availableIds && availableIds.length)
+            ? availableIds
+            : this.storyBoxSlots.filter(slot => slot && slot.id).map(slot => slot.id)
+        ));
+        const randomized = this.shuffleArray(ids);
+        this.storyPartySlots = Array.from({ length: partySize }, (_, index) => randomized[index] || null);
+    },
+
+    shuffleArray(list) {
+        const arr = Array.from(list);
+        for (let i = arr.length - 1; i > 0; i -= 1) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
     },
 
     updatePokemonBoxButtonState() {
@@ -982,18 +1041,67 @@ const App = {
     },
 
     openPokemonBoxOverlay() {
-        if (!this.dom.storyPokemonBoxOverlay || this.dom.pokemonBoxBtn?.disabled) return;
+        if (this.dom.pokemonBoxBtn?.disabled) return;
         this.updateStoryBoxSlots();
         this.storyPokemonBoxSelection = null;
         this.renderStoryPokemonParty();
         this.renderStoryPokemonBox();
-        this.dom.storyPokemonBoxOverlay.classList.remove('hidden');
+        this.showStoryBoxPanel();
     },
 
     closePokemonBoxOverlay() {
-        if (!this.dom.storyPokemonBoxOverlay) return;
-        this.dom.storyPokemonBoxOverlay.classList.add('hidden');
+        this.hideStoryBoxPanel();
         this.storyPokemonBoxSelection = null;
+    },
+
+    showStoryBoxPanel() {
+        if (!this.dom.storyPokemonBoxOverlay) return;
+        this.showFloatingModal(this.dom.storyPokemonBoxOverlay);
+        this.storyBoxViewActive = true;
+    },
+
+    hideStoryBoxPanel() {
+        if (!this.dom.storyPokemonBoxOverlay) return;
+        this.hideFloatingModal(this.dom.storyPokemonBoxOverlay);
+        this.storyBoxViewActive = false;
+    },
+
+    showFloatingModal(el) {
+        if (!el) return;
+        this.lockModalScroll();
+        el.scrollTop = 0;
+        el.classList.remove('hidden');
+        el.setAttribute('aria-hidden', 'false');
+    },
+
+    hideFloatingModal(el) {
+        if (!el) return;
+        if (!el.classList.contains('hidden')) {
+            el.classList.add('hidden');
+        }
+        el.setAttribute('aria-hidden', 'true');
+        this.unlockModalScroll();
+    },
+
+    lockModalScroll() {
+        if (this.modalLockCount === 0) {
+            this.modalScrollPosition = window.scrollY || window.pageYOffset;
+            document.body.classList.add('modal-open');
+            document.body.style.position = 'relative';
+            document.body.style.top = `-${this.modalScrollPosition}px`;
+        }
+        this.modalLockCount += 1;
+    },
+
+    unlockModalScroll() {
+        if (this.modalLockCount <= 0) return;
+        this.modalLockCount -= 1;
+        if (this.modalLockCount === 0) {
+            document.body.classList.remove('modal-open');
+            document.body.style.top = '';
+            const target = this.modalScrollPosition || 0;
+            window.scrollTo(0, target);
+        }
     },
 
     renderStoryPokemonParty() {
@@ -1333,6 +1441,11 @@ const App = {
         this.capturedPokemonIds.add(key);
         if (!this.dom.enemySelectScreen.classList.contains('hidden')) {
             this.renderPokemonList('enemy');
+        }
+        const pokemon = this.loader.getPokemonDetails(key);
+        if (pokemon) {
+            const exists = this.storyOwnedPokemonDetails.some(pk => String(pk['図鑑No']) === key);
+            if (!exists) this.storyOwnedPokemonDetails.push(pokemon);
         }
         this.saveManager.saveSlot(this.currentSlotId, {
             defeatedPokemonIds: Array.from(this.defeatedPokemonIds),

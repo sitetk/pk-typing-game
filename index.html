@@ -213,37 +213,6 @@
             </div>
             <div class="story-stage-grid" id="story-stage-grid"></div>
 
-            <div id="get-stage-modal" class="get-stage-modal hidden" role="dialog" aria-modal="true" aria-labelledby="get-stage-title">
-                <div class="get-stage-card">
-                    <header class="get-stage-card-header">
-                        <p class="text-xs uppercase tracking-[0.4em] text-slate-400 mb-1">GETステージ</p>
-                        <h3 id="get-stage-title" class="text-2xl font-black text-slate-900 mb-1">ほうびを えらぼう</h3>
-                        <p id="get-stage-description" class="text-sm text-slate-500">ステージの ほうびを うけとります。</p>
-                    </header>
-                    <div id="get-stage-type-label" class="text-xs font-bold uppercase tracking-[0.3em] text-emerald-600 mb-2"></div>
-                    <p id="get-stage-instructions" class="text-sm text-slate-500 mb-4"></p>
-                    <div id="get-stage-reward-list" class="get-stage-reward-list"></div>
-                    <div class="modal-actions mt-6 justify-end gap-3">
-                        <button id="get-stage-cancel-btn" class="btn-secondary px-4 py-2 rounded-full">やめる</button>
-                        <button id="get-stage-confirm-btn" class="px-4 py-2 rounded-full bg-emerald-500 text-white font-bold shadow-lg">うけとる</button>
-                    </div>
-                </div>
-            </div>
-
-            <div id="story-pokemon-box-overlay" class="story-pokemon-box-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="story-pokemon-box-title">
-                <div class="story-pokemon-box-card">
-                    <header class="story-pokemon-box-header">
-                        <div>
-                            <p class="text-xs text-slate-500">てもち & ボックス</p>
-                            <h3 id="story-pokemon-box-title" class="text-xl font-black text-slate-900">ポケモンボックス</h3>
-                        </div>
-                        <button id="story-pokemon-box-close-btn" class="story-pokemon-box-close" aria-label="ポケモンボックスを閉じる">×</button>
-                    </header>
-                    <div id="story-pokemon-party" class="story-pokemon-party" aria-label="てもちポケモン"></div>
-                    <div id="story-pokemon-box-grid" class="story-pokemon-box-grid" aria-label="ボックス格納ポケモン"></div>
-                    <p class="story-pokemon-box-note">ポケモンをタップして えらび、別のマスにタップすると入れかわります。空きマスには そのまま 移動します。</p>
-                </div>
-            </div>
         </div>
 
         <!-- パーティ選択画面 -->
@@ -527,8 +496,40 @@
         </div>
     </div>
 
-    <!-- Scripts: assets/js/ フォルダにある小文字のファイル名を指定 -->
-    <script src="assets/js/data-loader.js" onerror="handleScriptError('assets/js/data-loader.js')"></script>
+    <div id="get-stage-modal" class="get-stage-modal hidden" role="dialog" aria-modal="true" aria-labelledby="get-stage-title">
+        <div class="get-stage-card">
+            <header class="get-stage-card-header">
+                <p class="text-xs uppercase tracking-[0.4em] text-slate-400 mb-1">GETステージ</p>
+                <h3 id="get-stage-title" class="text-2xl font-black text-slate-900 mb-1">ほうびを えらぼう</h3>
+                <p id="get-stage-description" class="text-sm text-slate-500">ステージの ほうびを うけとります。</p>
+            </header>
+            <div id="get-stage-type-label" class="text-xs font-bold uppercase tracking-[0.3em] text-emerald-600 mb-2"></div>
+            <p id="get-stage-instructions" class="text-sm text-slate-500 mb-4"></p>
+            <div id="get-stage-reward-list" class="get-stage-reward-list"></div>
+            <div class="modal-actions mt-6 justify-end gap-3">
+                <button id="get-stage-cancel-btn" class="btn-secondary px-4 py-2 rounded-full">やめる</button>
+                <button id="get-stage-confirm-btn" class="px-4 py-2 rounded-full bg-emerald-500 text-white font-bold shadow-lg">うけとる</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="story-pokemon-box-overlay" class="story-pokemon-box-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="story-pokemon-box-title">
+        <div class="story-pokemon-box-card">
+            <header class="story-pokemon-box-header">
+                <div>
+                    <p class="text-xs text-slate-500">てもち & ボックス</p>
+                    <h3 id="story-pokemon-box-title" class="text-xl font-black text-slate-900">ポケモンボックス</h3>
+                </div>
+                <button id="story-pokemon-box-close-btn" class="story-pokemon-box-close" aria-label="ポケモンボックスを閉じる">×</button>
+            </header>
+            <div id="story-pokemon-party" class="story-pokemon-party" aria-label="てもちポケモン"></div>
+            <div id="story-pokemon-box-grid" class="story-pokemon-box-grid" aria-label="ボックス格納ポケモン"></div>
+            <p class="story-pokemon-box-note">ポケモンをタップして えらび、別のマスにタップすると入れかわります。空きマスには そのまま 移動します。</p>
+        </div>
+    </div>
+
+        <!-- Scripts: assets/js/ フォルダにある小文字のファイル名を指定 -->
+        <script src="assets/js/data-loader.js" onerror="handleScriptError('assets/js/data-loader.js')"></script>
     <script src="assets/js/typing-engine.js" onerror="handleScriptError('assets/js/typing-engine.js')"></script>
     <script src="assets/js/type-chart.js" onerror="handleScriptError('assets/js/type-chart.js')"></script>
     <script src="assets/js/move-utils.js" onerror="handleScriptError('assets/js/move-utils.js')"></script>
