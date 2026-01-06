@@ -1,0 +1,35 @@
+{
+    "slots": {
+        "1": {
+            "playerName": "デバッグ",
+            "lastPlayed": 1704500000000,
+            "clearedStages": [],
+            "defeatedPokemonIds": [],
+            "capturedPokemonIds": [
+                "25"
+            ],
+            "ownedPokemonIds": [
+                "25"
+            ],
+            "customParties": [],
+            "currentParty": [
+                "pikachu-lv100-debug"
+            ],
+            "playTime": 0,
+            "storyItems": [],
+            "ownedPokemonData": [
+                {
+                    "uuid": "pikachu-lv100-debug",
+                    "id": "25",
+                    "level": 100,
+                    "exp": 1000000,
+                    "nickname": "ピカチュウLv100",
+                    "名前（日本語）": "ピカチュウ",
+                    "図鑑No": "25"
+                }
+            ]
+        }
+    },
+    "lastUsedSlot": "1",
+    "exportedAt": 1704500000000
+}

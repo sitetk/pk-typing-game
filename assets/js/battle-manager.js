@@ -52,16 +52,17 @@ class BattleManager {
         this.isFaintedSwitch = false; // 死に出しフラグ
     }
 
-	initParties(partyData, playerLevel, enemyPartyData, enemyLevel) {
-		// 味方
-		this.party = partyData.map(data => {
-			const entity = this.createEntity(data, playerLevel);
-			if (Array.isArray(data.selectedMoves) && data.selectedMoves.length > 0) {
-				entity.moves = data.selectedMoves.map(move => ({ ...move }));
-			}
-			return entity;
-		});
-        this.player = this.party[0];
+    initParties(partyData, playerLevel, enemyPartyData, enemyLevel) {
+        // 味方
+        this.party = partyData.map(data => {
+            const entity = this.createEntity(data, playerLevel);
+            if (Array.isArray(data.selectedMoves) && data.selectedMoves.length > 0) {
+                entity.moves = data.selectedMoves.map(move => ({ ...move }));
+            }
+            return entity;
+        });
+        // 先頭の生存ポケモンを繰り出す
+        this.player = this.party.find(p => p.hp > 0) || this.party[0];
 
         // 敵
         this.enemyParty = Array.isArray(enemyPartyData) ? enemyPartyData : [enemyPartyData];
@@ -80,14 +81,16 @@ class BattleManager {
     }
 
     createEntity(data, level) {
-        const maxHp = Math.floor(data['HP'] * level / 20) + 20;
+        // データ個別のレベルがあればそれを優先
+        const actualLevel = (data.level !== undefined) ? data.level : level;
+        const maxHp = Math.floor(data['HP'] * actualLevel / 20) + 20;
 
         // 技構成ロジック
         let availableMoves = [];
         if (data.moves) {
             availableMoves = data.moves.filter(m => {
                 const route = m['経路'] || '';
-                const isLevelOk = (m['習得レベル'] || 999) <= level;
+                const isLevelOk = (m['習得レベル'] || 999) <= actualLevel;
                 const isNotStatus = m['分類'] !== 'へんか';
                 return (route.includes('レベルアップ') || route.includes('初期')) && isLevelOk && isNotStatus;
             });
@@ -100,12 +103,12 @@ class BattleManager {
 
         return {
             ...data,
-            level: level,
+            level: actualLevel,
             maxHp: maxHp,
-            hp: maxHp,
-            atk: Math.floor((data.Attack || 50) * level / 50) + 5,
-            def: Math.floor((data.Defense || 50) * level / 50) + 5,
-            spd: Math.floor((data.Speed || 50) * level / 50) + 5,
+            hp: (data.currentHp !== undefined) ? data.currentHp : maxHp,
+            atk: Math.floor((data.Attack || 50) * actualLevel / 50) + 5,
+            def: Math.floor((data.Defense || 50) * actualLevel / 50) + 5,
+            spd: Math.floor((data.Speed || 50) * actualLevel / 50) + 5,
             moves: availableMoves,
             isFainted: false
         };
@@ -158,6 +161,11 @@ class BattleManager {
     }
 
     // --- アクション選択 (同期) ---
+
+    returnToMenu() {
+        this.setPhase(BattleManager.PHASE.MENU);
+        this.message(`${this.player.name} は どうする？`);
+    }
 
     setPhase(newPhase) {
         this.phase = newPhase;
@@ -265,6 +273,32 @@ class BattleManager {
         await BattleManager.wait(1000);
     }
 
+    async handleMiss() {
+        const dmg = Math.max(1, Math.floor(this.player.maxHp * 0.1));
+        this.player.hp = Math.max(0, this.player.hp - dmg);
+        this.message("タイプミス！ ダメージを うけた！", 'enemy'); // red message
+        if (this.onEffect) this.onEffect('damage', 'player');
+        this.notifyUpdate();
+        if (this.player.hp <= 0) {
+            await this.handlePlayerFaint();
+        }
+    }
+
+    async applyPerfectBonus() {
+        if (this.player.hp <= 0) return;
+        const heal = Math.floor(this.player.maxHp * 0.1);
+        if (heal > 0 && this.player.hp < this.player.maxHp) {
+            const oldHp = this.player.hp;
+            this.player.hp = Math.min(this.player.maxHp, this.player.hp + heal);
+            const recovered = this.player.hp - oldHp;
+            if (recovered > 0) {
+                this.message(`ノーミスボーナス！ HPが ${recovered} かいふくした！`);
+                this.notifyUpdate();
+                await BattleManager.wait(500);
+            }
+        }
+    }
+
     async performCatch() {
         this.message(`${this.player.name} は モンスターボールを なげた！`);
         if (this.onEffect) this.onEffect('ball-throw');
@@ -364,17 +398,18 @@ class BattleManager {
 
     // --- 戦闘ターン実行 (攻撃) ---
 
-    commitTurn() {
+    commitTurn(metrics = {}) {
+        // metrics: { speedMultiplier: number, isPerfect: boolean }
         // タイピング完了時に呼ばれる
         if (this.phase !== BattleManager.PHASE.TYPING) return;
         this.setPhase(BattleManager.PHASE.EXEC);
-        this.executeCombatTurn(); // 非同期メソッドを開始（awaitしない）
+        this.executeCombatTurn(metrics); // 非同期メソッドを開始（awaitしない）
     }
 
     /**
      * 1ターンの戦闘処理（プレイヤー技 -> 敵技 or その逆）
      */
-    async executeCombatTurn() {
+    async executeCombatTurn(metrics = {}) {
         // 敵の技決定
         const enemyMove = this.enemy.moves[Math.floor(Math.random() * this.enemy.moves.length)];
 
@@ -403,7 +438,7 @@ class BattleManager {
             if (action.target.hp <= 0) continue;
 
             // 攻撃実行
-            const result = await this.performAttack(action.actor, action.target, action.move, action.isPlayer);
+            const result = await this.performAttack(action.actor, action.target, action.move, action.isPlayer, metrics);
 
             // どちらかが倒れた場合
             if (result === 'fainted') {
@@ -450,7 +485,7 @@ class BattleManager {
      * 単発攻撃処理
      * @returns {Promise<string>} 結果ステータス ('ok' | 'fainted')
      */
-    async performAttack(attacker, defender, move, isPlayerSide) {
+    async performAttack(attacker, defender, move, isPlayerSide, metrics = {}) {
         const msgType = isPlayerSide ? 'normal' : 'enemy';
         this.message(`${attacker.name} の ${move['技名']}！`, msgType);
 
@@ -473,6 +508,13 @@ class BattleManager {
         const statRatio = attacker.atk / defender.def;
         let damage = Math.floor((levelFactor * power * statRatio / 50) + 2);
         damage = Math.floor(damage * (Math.random() * 0.15 + 0.85));
+
+        // Speed Critical Bonus
+        if (isPlayerSide && metrics.speedMultiplier && metrics.speedMultiplier > 1) {
+            damage = Math.floor(damage * metrics.speedMultiplier);
+            this.message("スピードボーナス！ ダメージ2倍！");
+            await BattleManager.wait(500);
+        }
 
         // ダメージ適用
         defender.hp = Math.max(0, defender.hp - damage);

@@ -1,0 +1,160 @@
+// Trainer Battle Additional Methods (temporary file for insertion)
+
+    showTrainerBattleModal(stageId, stage) {
+        const trainerData = this.loader.getTrainerByStageId(stageId);
+        if (!trainerData || !trainerData.party || !trainerData.party.length) {
+            alert('トレーナー情報が みつかりません。');
+            return;
+        }
+        
+        this.currentTrainerData = trainerData;
+        this.currentTrainerStageId = stageId;
+        
+        // モーダル内容の更新
+        if (this.dom.trainerBattleTitle) {
+            this.dom.trainerBattleTitle.textContent = trainerData.name || 'トレーナー';
+        }
+        if (this.dom.trainerBattleStageName) {
+            this.dom.trainerBattleStageName.textContent = stage.name || '';
+        }
+        if (this.dom.trainerBattleMessage) {
+            this.dom.trainerBattleMessage.textContent = `「${trainerData.message_start}」`;
+        }
+        
+        // トレーナーのポケモンリストを表示
+        if (this.dom.trainerPokemonList) {
+            const pokemonHtml = trainerData.party.map(pkData => {
+                const pokemon = this.loader.getPokemonDetails(pkData.name);
+                if (!pokemon) return '';
+                const spriteUrl = this.getSpriteUrl(pokemon['図鑑No']);
+                return `
+                    <div class="bg-white border border-slate-200 rounded-lg p-2 flex flex-col items-center">
+                        <img src="${spriteUrl}" alt="${pokemon.name}" class="pixel-art h-12 w-12">
+                        <span class="text-xs font-bold text-slate-700">${pokemon.name}</span>
+                        <span class="text-[10px] text-slate-500">Lv.${pkData.level}</span>
+                    </div>
+                `;
+            }).join('');
+            this.dom.trainerPokemonList.innerHTML = pokemonHtml;
+        }
+        
+        this.showFloatingModal(this.dom.trainerBattleModal);
+    },
+
+    closeTrainerBattleModal() {
+        if (!this.dom.trainerBattleModal) return;
+        this.hideFloatingModal(this.dom.trainerBattleModal);
+        this.currentTrainerData = null;
+        this.currentTrainerStageId = null;
+    },
+
+    async startTrainerBattle() {
+        if (!this.currentTrainerData || !this.currentTrainerStageId) return;
+        
+        const trainerData = this.currentTrainerData;
+        const stageId = this.currentTrainerStageId;
+        
+        // ストーリーパーティからバトル用のパーティを作成
+        const validPartyIds = this.storyPartySlots.filter(id => id);
+        if (validPartyIds.length === 0) {
+            alert('パーティに ポケモンが いません！');
+            return;
+        }
+        
+        this.currentParty = validPartyIds.map(id => {
+            const pokemon = this.loader.getPokemonDetails(id);
+            return pokemon;
+        }).filter(Boolean);
+        
+        if (this.currentParty.length === 0) {
+            alert('バトル可能な ポケモンが いません！');
+            return;
+        }
+        
+        // トレーナーのポケモンパーティを作成
+        const enemyParty = trainerData.party.map(pkData => {
+            const pokemon = this.loader.getPokemonDetails(pkData.name);
+            if (!pokemon) return null;
+            return {
+                ...pokemon,
+                level: pkData.level
+            };
+        }).filter(Boolean);
+        
+        if (enemyParty.length === 0) {
+            alert('相手のポケモンが 見つかりません！');
+            return;
+        }
+        
+        // モーダルを閉じる
+        this.closeTrainerBattleModal();
+        
+        // バトル画面に遷移
+        this.hideAllScreens();
+        this.dom.battleScreen.classList.remove('hidden');
+        this.recordScreen('battle');
+        this.dom.keyboard.classList.remove('translate-y-full');
+        if (this.dom.keyboardColumn) this.dom.keyboardColumn.classList.remove('hidden');
+        
+        // BGM
+        const bgmType = trainerData.stage_id.includes('GYM') ? 'battle_trainer' : 'battle_rival';
+        this.audio.playBgm(bgmType);
+        
+        // バトルマネージャー初期化
+        this.battle = new BattleManager(
+            this.currentParty,
+            50, // プレイヤーレベル（ストーリーモードでは固定）
+            enemyParty.map((p, idx) => ({...p, level: trainerData.party[idx].level})),
+            trainerData.party[0].level, // 敵のレベル（最初のポケモンのレベルを使用）
+            this.typing,
+            this.loader.itemList,
+            {
+                isTrainerBattle: true,
+                trainerData: trainerData
+            }
+        );
+        
+        // コールバック設定
+        this.battle.onUpdateUI = (p, e) => this.updateBattleUI(p, e);
+        this.battle.onPokemonChange = (type, player, enemy) => {
+            this.clearCaptureVisuals();
+            this.setBattleSprite(this.dom.playerSpriteContainer, player['図鑑No'], true);
+            this.setBattleSprite(this.dom.enemySpriteContainer, enemy['図鑑No'], false);
+        };
+        this.battle.onEffect = (effect, target) => {
+            if (['attack', 'damage', 'fainted'].includes(effect)) this.triggerAnimation(effect, target);
+            if (effect === 'damage') this.audio.playSe('attack');
+        };
+        this.battle.onMessage = (msg, type) => this.handleBattleMessage(msg, type);
+        this.battle.onPhaseChange = (phase) => this.updatePhaseUI(phase);
+        this.battle.onMoveSelect = (move) => this.displaySelectedMove(move);
+        this.battle.onBattleEnd = (res) => {
+            this.handleTrainerBattleEnd(res, stageId, trainerData);
+        };
+        this.battle.onEnemyDefeat = (enemy) => {
+            const id = enemy && enemy['図鑑No'];
+            if (id) this.markDefeatedPokemon(id);
+        };
+        
+        this.battle.start();
+    },
+
+    handleTrainerBattleEnd(result, stageId, trainerData) {
+        const win = result === 'win';
+        setTimeout(() => {
+            if (win) {
+                // 勝利時: ステージをクリア済みに追加
+                this.clearedStages.add(stageId);
+                this.saveStoryProgress();
+                alert(`${trainerData.name} との バトルに かった！`);
+                
+                // ステージ画面を再描画してロックを解除
+                const visibleStages = this.buildStoryStageTiles();
+                this.renderStoryStages(visibleStages);
+            } else {
+                alert('まけちゃった... つぎは がんばろう！');
+            }
+            // ストーリーステージ選択画面に戻る
+            this.showStoryStageScreen(this.buildStoryStageTiles());
+        }, 1500);
+    },

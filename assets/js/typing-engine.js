@@ -5,8 +5,8 @@
 class TypingEngine {
     constructor() {
         this.reset();
-        
-this.romanTable = {
+
+        this.romanTable = {
             'きぇ': ['kye'], 'きゃ': ['kya'], 'きゅ': ['kyu'], 'きょ': ['kyo'],
             'しぇ': ['sye', 'she'], 'しゃ': ['sya', 'sha'], 'しゅ': ['syu', 'shu'], 'しょ': ['syo', 'sho'],
             'ちぇ': ['tye', 'che'], 'ちゃ': ['tya', 'cha'], 'ちゅ': ['tyu', 'chu'], 'ちょ': ['tyo', 'cho'],
@@ -53,6 +53,8 @@ this.romanTable = {
         this.remainRomanOptions = [];
         this.lastInputCorrect = null;
         this.lastTypedChar = "";
+        this.startTime = Date.now();
+        this.mistakeCount = 0;
     }
 
     /**
@@ -73,7 +75,41 @@ this.romanTable = {
         console.log(`[TypingEngine] Target: ${text} -> Options:`, this.remainRomanOptions);
     }
 
+    // ... (generateOptions, findOptionsPrefix omitted, no changes needed there)
+
     /**
+     * 入力文字の判定
+     */
+    checkInput(char) {
+        const key = char.toLowerCase();
+        // 入力キーで始まる候補があるかフィルタリング
+        const matches = this.remainRomanOptions.filter(opt => opt.startsWith(key));
+
+        if (matches.length > 0) {
+            this.typedRoman += key;
+            // 候補リストの先頭文字を削除して更新
+            this.remainRomanOptions = matches.map(opt => opt.substring(1));
+            this.lastInputCorrect = true;
+            this.lastTypedChar = key;
+            return { success: true, char: key, isComplete: this.isComplete() };
+        } else {
+            this.lastInputCorrect = false;
+            this.mistakeCount++;
+            return { success: false, char: key, isComplete: false };
+        }
+    }
+
+    isComplete() {
+        return this.remainRomanOptions.some(opt => opt === "");
+    }
+
+    getElapsedTime() {
+        return Date.now() - this.startTime;
+    }
+
+    isPerfect() {
+        return this.isComplete() && this.mistakeCount === 0;
+    }    /**
      * 全入力パターンの生成
      * 促音（っ）や拗音の処理を含む再帰的展開
      */
@@ -90,34 +126,34 @@ this.romanTable = {
             if (kana[i] === 'っ' && i + 1 < kana.length) {
                 const nextPart = kana.substring(i + 1);
                 const nextOptions = this.findOptionsPrefix(nextPart); // 次の文字のローマ字候補を取得
-                
+
                 if (nextOptions && nextOptions.length > 0) {
                     // 次の文字が子音で始まる場合のみ、その子音を重ねるパターンを追加
                     const consonantOpts = nextOptions.filter(opt => opt.match(/^[a-z]/));
-                    
+
                     if (consonantOpts.length > 0) {
                         // 重ねる文字を取得 (k, s, t, etc.)
                         const firstChars = [...new Set(consonantOpts.map(o => o[0]))];
                         let newRes = [];
-                        
+
                         // 既存の候補それぞれに対して分岐を作成
                         for (let r of results) {
                             // パターンA: 子音重ね (tta)
                             for (let fc of firstChars) {
-                                newRes.push(r + fc); 
+                                newRes.push(r + fc);
                             }
                             // パターンB: 単独入力 (xtu, ltu) は下のループで処理されるためここではスキップ可能だが
                             // 厳密にはここでの分岐が必要な場合もある。今回は簡易化。
                         }
-                        
+
                         // ここで分岐確定したら、次の文字へ進むのではなく、
                         // 「っ」を消費した扱いにするが、次の文字の生成ロジックと結合する必要がある。
                         // 今回のエンジンの構造上、少し複雑になるため、簡易的な「子音重ね」を優先実装。
                         // 正確には `generateOptions` を再帰させるのがベストだが、ここでは既存ロジックを踏襲。
-                        
+
                         results = newRes;
-                        i++; 
-                        continue; 
+                        i++;
+                        continue;
                     }
                 }
             }
@@ -160,30 +196,7 @@ this.romanTable = {
         return null;
     }
 
-    /**
-     * 入力文字の判定
-     */
-    checkInput(char) {
-        const key = char.toLowerCase();
-        // 入力キーで始まる候補があるかフィルタリング
-        const matches = this.remainRomanOptions.filter(opt => opt.startsWith(key));
-        
-        if (matches.length > 0) {
-            this.typedRoman += key;
-            // 候補リストの先頭文字を削除して更新
-            this.remainRomanOptions = matches.map(opt => opt.substring(1));
-            this.lastInputCorrect = true;
-            this.lastTypedChar = key;
-            return { success: true, char: key, isComplete: this.isComplete() };
-        } else {
-            this.lastInputCorrect = false;
-            return { success: false, char: key, isComplete: false };
-        }
-    }
 
-    isComplete() {
-        return this.remainRomanOptions.some(opt => opt === "");
-    }
 
     /**
      * UI表示用の状態オブジェクトを返却

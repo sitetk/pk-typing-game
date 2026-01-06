@@ -13,10 +13,14 @@ class SaveManager {
             clearedStages: [],
             defeatedPokemonIds: [],
             capturedPokemonIds: [],
+            battleDefeatedPokemonIds: [],
+            battleCapturedPokemonIds: [],
+            ownedPokemonIds: [],  // IDのみを保存
             customParties: [],
             currentParty: [],
             playTime: 0,
-            storyItems: []
+            storyItems: [],
+            ownedPokemonData: []
         };
     }
 
@@ -107,12 +111,14 @@ class SaveManager {
             clearedStages: Array.isArray(slotData.clearedStages) ? slotData.clearedStages : template.clearedStages,
             defeatedPokemonIds: Array.isArray(slotData.defeatedPokemonIds) ? slotData.defeatedPokemonIds : template.defeatedPokemonIds,
             capturedPokemonIds: Array.isArray(slotData.capturedPokemonIds) ? slotData.capturedPokemonIds : template.capturedPokemonIds,
+            ownedPokemonIds: Array.isArray(slotData.ownedPokemonIds) ? slotData.ownedPokemonIds : (slotData.storyOwnedPokemonDetails ? [] : template.ownedPokemonIds),
             customParties: Array.isArray(slotData.customParties) ? slotData.customParties : template.customParties,
             currentParty: Array.isArray(slotData.currentParty) ? slotData.currentParty : template.currentParty,
             playTime: typeof slotData.playTime === 'number'
                 ? slotData.playTime
                 : Number(slotData.playTime) || template.playTime,
-            storyItems: Array.isArray(slotData.storyItems) ? slotData.storyItems : template.storyItems
+            storyItems: Array.isArray(slotData.storyItems) ? slotData.storyItems : template.storyItems,
+            ownedPokemonData: Array.isArray(slotData.ownedPokemonData) ? slotData.ownedPokemonData : template.ownedPokemonData
         };
     }
 

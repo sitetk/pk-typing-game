@@ -12,19 +12,19 @@ class MoveConfigScreen {
     show() {
         this.app.hideAllScreens();
         this.dom.moveConfigScreen.classList.remove('hidden');
-        
+
 
         // 初期選択ポケモン
         this.currentConfigPokemonIndex = 0;
 
         // データ準備
         this.app.currentParty.forEach(p => {
-             if (!p.selectedMoves) {
-                 const available = p.moves.filter(m => m['習得レベル'] <= this.app.battleSettings.playerLevel);
-                 const attacks = available.filter(m => m['分類'] !== 'へんか');
-                 p.selectedMoves = attacks.slice(-4);
-                 if (p.selectedMoves.length === 0 && available.length > 0) p.selectedMoves = available.slice(-4);
-             }
+            if (!p.selectedMoves) {
+                const available = p.moves.filter(m => m['習得レベル'] <= this.app.battleSettings.playerLevel);
+                const attacks = available.filter(m => m['分類'] !== 'へんか');
+                p.selectedMoves = attacks.slice(-4);
+                if (p.selectedMoves.length === 0 && available.length > 0) p.selectedMoves = available.slice(-4);
+            }
         });
 
         this.render();
@@ -38,10 +38,10 @@ class MoveConfigScreen {
             console.error("moveConfigTabs element not found");
             return;
         }
-        
+
         this.dom.moveConfigTabs.innerHTML = this.app.currentParty.map((p, i) => `
             <button class="tab-btn ${i === this.currentConfigPokemonIndex ? 'active' : ''}" data-index="${i}">
-                <img src="${this.app.getSpriteUrl(p['図鑑No'])}" class="pixel-art">
+                <img src="${Utils.getSpriteUrl(p['図鑑No'])}" class="pixel-art">
                 <span>${p.name}</span>
             </button>
         `).join('');
@@ -63,10 +63,10 @@ class MoveConfigScreen {
         this.dom.learnableMovesList.innerHTML = filteredMoves.map((m, i) => {
             const isChecked = pokemon.selectedMoves.some(sm => sm['技名'] === m['技名']);
             const moveData = this.app.loader.getMoveDetails(m['技名']);
-            
+
             // タイプに基づいた背景色クラスを決定
             const typeClass = MoveUtils.getTypeColorClass(moveData ? moveData['タイプ'] : 'ノーマル');
-            
+
             return `
             <label class="move-check-item ${isChecked ? 'checked' : ''} ${typeClass} border-l-4">
                 <div class="flex flex-col">
@@ -93,9 +93,9 @@ class MoveConfigScreen {
                     pokemon.selectedMoves.push(targetMove);
                 } else {
                     if (pokemon.selectedMoves.length <= 1) {
-                         alert("わざは 1つ以上 必要です");
-                         e.target.checked = true;
-                         return;
+                        alert("わざは 1つ以上 必要です");
+                        e.target.checked = true;
+                        return;
                     }
                     pokemon.selectedMoves = pokemon.selectedMoves.filter(m => m['技名'] !== targetMove['技名']);
                 }
@@ -108,7 +108,7 @@ class MoveConfigScreen {
         this.dom.currentMovesList.innerHTML = pokemon.selectedMoves.map(m => {
             const moveData = this.app.loader.getMoveDetails(m['技名']);
             const typeClass = MoveUtils.getTypeColorClass(moveData ? moveData['タイプ'] : 'ノーマル');
-            
+
             return `
             <div class="p-2 bg-slate-50 border rounded text-sm flex justify-between ${typeClass} border-l-4">
                 <span class="font-bold">${m['技名']}</span>
@@ -142,7 +142,7 @@ class MoveConfigScreen {
             'はがね': 'border-zinc-500 bg-zinc-50',
             'フェアリー': 'border-pink-300 bg-pink-50'
         };
-        
+
         return typeColors[type] || 'border-gray-400 bg-gray-50';
     }
 }

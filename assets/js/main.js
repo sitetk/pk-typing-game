@@ -3,22 +3,7 @@
  * UI更新と入力制御の統括
  */
 const SAVE_SLOT_IDS = ['1', '2', '3'];
-const createStageIds = (count) => Array.from({ length: count }, (_, index) => `ST_${String(index + 1).padStart(2, '0')}`);
-const STORY_REGIONS = {
-    KANTO: {
-        key: 'KANTO',
-        label: 'カントー地方編',
-        description: 'マサラタウンから はじまる ぼうけんの はじまり。',
-        image: 'assets/img/kanto-story-img.png',
-        stageIds: createStageIds(48)
-    },
-    DEFAULT: {
-        key: 'DEFAULT',
-        label: 'ストーリーを えらぶ',
-        description: 'リッジョンを えらんで たびだとう。',
-        image: 'assets/img/kanto-story-img.png'
-    }
-};
+
 const App = {
     loader: null,
     typing: null,
@@ -91,7 +76,7 @@ const App = {
     enemySelectBackDefaultHandler: null,
     enemySelectConfirmDefaultHandler: null,
 
-// プリセットパーティ
+    // プリセットパーティ
     presetParties: [
         { name: "パルデア・オールスターズ", ids: ['908', '911', '914', '923', '959', '998'] },
         { name: "古代の咆哮", ids: ['1007', '1005', '987', '985', '984', '989'] },
@@ -117,6 +102,7 @@ const App = {
         this.typing = new TypingEngine();
         this.audio = new AudioManager();
         this.saveManager = new SaveManager();
+        this.storyManager = new StoryManager(this); // Initialize StoryManager
         this.loadAudioPreferences();
 
         try {
@@ -162,13 +148,14 @@ const App = {
             saveFileInput: document.getElementById('save-file-input'),
             nameInputModal: document.getElementById('name-input-modal'),
             nameInputField: document.getElementById('name-input-field'),
+            playerExpBar: document.getElementById('player-exp-bar'),
             nameInputConfirm: document.getElementById('name-input-confirm'),
             nameInputCancel: document.getElementById('name-input-cancel'),
             importTargetModal: document.getElementById('import-target-modal'),
             importDataSummary: document.getElementById('import-data-summary'),
             importSlotButtons: document.querySelectorAll('#import-target-modal .import-slot-btn'),
             importCancelBtn: document.getElementById('import-cancel-btn'),
-            
+
             // 技構成画面
             moveConfigTabs: document.getElementById('move-config-tabs'),
             learnableMovesList: document.getElementById('learnable-moves-list'),
@@ -232,7 +219,14 @@ const App = {
             getStageRewardList: document.getElementById('get-stage-reward-list'),
             getStageConfirmBtn: document.getElementById('get-stage-confirm-btn'),
             getStageCancelBtn: document.getElementById('get-stage-cancel-btn'),
-            getStageTypeLabel: document.getElementById('get-stage-type-label')
+            getStageTypeLabel: document.getElementById('get-stage-type-label'),
+            trainerBattleModal: document.getElementById('trainer-battle-modal'),
+            trainerBattleTitle: document.getElementById('trainer-battle-title'),
+            trainerBattleStageName: document.getElementById('trainer-battle-stage-name'),
+            trainerBattleMessage: document.getElementById('trainer-battle-message'),
+            trainerPokemonList: document.getElementById('trainer-pokemon-list'),
+            trainerBattleStartBtn: document.getElementById('trainer-battle-start-btn'),
+            trainerBattleCancelBtn: document.getElementById('trainer-battle-cancel-btn')
         };
     },
 
@@ -313,7 +307,7 @@ const App = {
             key.addEventListener('mousedown', (e) => {
                 e.preventDefault();
                 const k = key.dataset.key;
-                this.handleGlobalKeyDown({ key: k, preventDefault: () => {} });
+                this.handleGlobalKeyDown({ key: k, preventDefault: () => { } });
             });
         });
 
@@ -339,6 +333,9 @@ const App = {
 
         if (this.dom.getStageConfirmBtn) this.dom.getStageConfirmBtn.onclick = () => this.confirmGetStageReward();
         if (this.dom.getStageCancelBtn) this.dom.getStageCancelBtn.onclick = () => this.closeGetStageModal();
+
+        if (this.dom.trainerBattleStartBtn) this.dom.trainerBattleStartBtn.onclick = () => this.startTrainerBattle();
+        if (this.dom.trainerBattleCancelBtn) this.dom.trainerBattleCancelBtn.onclick = () => this.closeTrainerBattleModal();
 
         if (this.dom.pokemonBoxBtn) {
             this.dom.pokemonBoxBtn.onclick = () => this.openPokemonBoxOverlay();
@@ -450,7 +447,7 @@ const App = {
             const lastPlayed = slot.lastPlayed ? this.formatTimestamp(slot.lastPlayed) : 'まだ なし';
             const cleared = (slot.clearedStages || []).length;
             const defeated = (slot.defeatedPokemonIds || []).length;
-            const captured = (slot.capturedPokemonIds || []).length;
+            const captured = (slot.ownedPokemonData || slot.storyOwnedPokemonDetails || []).length || (slot.capturedPokemonIds || []).length;
             const customCount = (slot.customParties || []).length;
             const playTime = this.formatPlayTime(slot.playTime || 0);
             const isCurrent = this.currentSlotId === id;
@@ -509,8 +506,75 @@ const App = {
         this.currentSlotId = slotId;
         this.defeatedPokemonIds = new Set(slotData.defeatedPokemonIds || []);
         this.capturedPokemonIds = new Set(slotData.capturedPokemonIds || []);
+        this.battleDefeatedPokemonIds = new Set(slotData.battleDefeatedPokemonIds || []);
+        this.battleCapturedPokemonIds = new Set(slotData.battleCapturedPokemonIds || []);
+
+        // 以前のセーブデータ(混在していたデータ)からの移行措置として、
+        // バトル側の記録が空で、かつ通常記録がある場合はコピーする
+        if (this.battleDefeatedPokemonIds.size === 0 && this.defeatedPokemonIds.size > 0) {
+            this.battleDefeatedPokemonIds = new Set(this.defeatedPokemonIds);
+        }
+        if (this.battleCapturedPokemonIds.size === 0 && this.capturedPokemonIds.size > 0) {
+            this.battleCapturedPokemonIds = new Set(this.capturedPokemonIds);
+        }
         this.storyItems = new Set(slotData.storyItems || []);
         this.clearedStages = new Set(slotData.clearedStages || []);
+
+        // Pokemonデータの復元 (UUID対応)
+        // 旧データ(ownedPokemonIds/storyOwnedPokemonDetails)からの移行も考慮
+        let rawOwnedData = slotData.ownedPokemonData || [];
+
+        // 旧形式(IDリスト)からの移行またはバックアップ
+        if (!rawOwnedData.length && slotData.ownedPokemonIds) {
+            rawOwnedData = slotData.ownedPokemonIds.map(id => ({ id, level: 5 }));
+        }
+        // 旧形式(詳細リスト)からの移行
+        if (!rawOwnedData.length && slotData.storyOwnedPokemonDetails) {
+            rawOwnedData = slotData.storyOwnedPokemonDetails.map(pk => ({
+                id: String(pk['図鑑No'] || pk.id),
+                level: pk['獲得レベル'] || pk.level || 5,
+                exp: pk.exp,
+                nickname: pk.nickname,
+                uuid: pk.uuid
+            }));
+        }
+
+        this.storyOwnedPokemonDetails = rawOwnedData
+            .map(data => {
+                const pokemon = this.loader.getPokemonDetails(data.id);
+                if (!pokemon) return null;
+                return {
+                    ...pokemon,
+                    '獲得レベル': data.level || 5,
+                    exp: data.exp || ExpTable.getExpForLevel(data.level || 5),
+                    uuid: data.uuid || this.generateUUID(), // UUIDがなければ生成
+                    nickname: data.nickname || ''
+                };
+            })
+            .filter(Boolean);
+
+        // バトルモードでゲットしたポケモンがストーリーに入り込んでしまった既存データの修正措置
+        // capturedPokemonIds (ストーリー入手フラグ) にないポケモンは除外する
+        if (this.capturedPokemonIds.size > 0) {
+            this.storyOwnedPokemonDetails = this.storyOwnedPokemonDetails.filter(pk => {
+                const id = String(pk['図鑑No']);
+                return this.capturedPokemonIds.has(id);
+            });
+        }
+
+        // パーティの復元: IDのリストからUUIDのリストへ
+        // 注: 旧データはDexNoが入っている可能性があるため、UUIDに変換が必要
+        this.storyPartySlots = (slotData.currentParty || []).map(slotId => {
+            if (!slotId) return null;
+            // すでにUUIDならそのまま
+            if (this.storyOwnedPokemonDetails.some(pk => pk.uuid === slotId)) return slotId;
+            // DexNoなら、持っているその種類のポケモン(未割り当て)を探す
+            // 簡易的に先頭の同種ポケモンを割り当てる（重複時の厳密な復元は困難だが、移行時のみの問題）
+            const found = this.storyOwnedPokemonDetails.find(pk => String(pk['図鑑No']) === String(slotId));
+            return found ? found.uuid : null;
+        });
+        while (this.storyPartySlots.length < 6) this.storyPartySlots.push(null);
+
         this.setActiveSlotFromData(slotData);
         if (this.isSlotEmpty(slotData)) {
             this.pendingSlotForName = slotId;
@@ -524,6 +588,12 @@ const App = {
         this.showModeSelectScreen();
     },
 
+    generateUUID() {
+        return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+    },
+
+
+
     handleSlotDelete(slotId) {
         if (!slotId) return;
         if (!confirm('このスロットのデータを ほんとうに けしても いいですか？')) return;
@@ -531,6 +601,12 @@ const App = {
         if (this.currentSlotId === slotId) {
             this.currentSlotId = '1';
             this.defeatedPokemonIds.clear();
+            this.capturedPokemonIds.clear();
+            if (this.battleDefeatedPokemonIds) this.battleDefeatedPokemonIds.clear();
+            if (this.battleCapturedPokemonIds) this.battleCapturedPokemonIds.clear();
+            this.storyItems.clear();
+            this.clearedStages.clear();
+            this.resetStoryCapturedCollections();
         }
         this.renderSaveSlots(this.saveManager.loadAll());
     },
@@ -674,33 +750,7 @@ const App = {
         else if (mode === 'BATTLE') this.showPartySelectScreen();
     },
 
-    handleStoryRegionSelect(region) {
-        if (!region) return;
-        this.storyRegion = region;
-        this.audio.playSe('select');
-        const regionDef = STORY_REGIONS[region] || STORY_REGIONS.DEFAULT;
-        this.storyRegionDisplayName = regionDef.label;
-        this.storyRegionImageUrl = regionDef.image;
-        const visibleStages = this.buildStoryStageTiles();
-        this.showStoryStageScreen(visibleStages);
-    },
 
-    buildStoryStageTiles() {
-        const regionDef = STORY_REGIONS[this.storyRegion] || STORY_REGIONS.DEFAULT;
-        const allStages = this.loader.stageList || [];
-        const stageIds = regionDef.stageIds || allStages.map(stage => stage.id);
-        return stageIds.map((id, index) => {
-            const found = allStages.find(stage => stage.id === id);
-            if (!found) return null;
-            const prevStageId = stageIds[index - 1];
-            const isLocked = index > 0 && prevStageId && !this.clearedStages.has(prevStageId);
-            return {
-                ...found,
-                isLocked,
-                previewText: index === 0 ? 'stage01' : ''
-            };
-        }).filter(Boolean);
-    },
 
     buildStoryStageTiles() {
         const regionDef = STORY_REGIONS[this.storyRegion] || STORY_REGIONS.DEFAULT;
@@ -727,15 +777,7 @@ const App = {
     },
 
     showStoryRegionSelectScreen(logHistory = true) {
-        this.hideAllScreens();
-        if (this.dom.startPanel) this.dom.startPanel.classList.add('hidden');
-        const modePanel = document.getElementById('mode-select');
-        if (modePanel) modePanel.classList.add('hidden');
-        if (this.dom.storyRegionSelectScreen) this.dom.storyRegionSelectScreen.classList.remove('hidden');
-        if (this.dom.storyStageScreen) this.dom.storyStageScreen.classList.add('hidden');
-        this.attachStoryRegionCardHandlers();
-        this.storyCollectionInitialized = false;
-        if (logHistory) this.recordScreen('story-region-select');
+        this.storyManager.showStoryRegionSelectScreen(logHistory);
     },
 
     resetStoryCapturedCollections() {
@@ -749,89 +791,15 @@ const App = {
     },
 
     showStoryStageScreen(stages = []) {
-        this.resetStoryCapturedCollections();
-        this.storyCollectionInitialized = true;
-        const maxStageTiles = 48;
-        const displayStages = Array.isArray(stages) ? stages.slice(0, maxStageTiles) : [];
-        this.storyStageList = displayStages;
-        this.hideAllScreens();
-        if (this.dom.storyStageBannerImage && this.storyRegionImageUrl) {
-            this.dom.storyStageBannerImage.src = this.storyRegionImageUrl;
-        }
-        if (this.dom.storyStageRegionLabel) {
-            this.dom.storyStageRegionLabel.textContent = this.storyRegionDisplayName || STORY_REGIONS.DEFAULT.label;
-        }
-        if (this.dom.storyStageScreen) this.dom.storyStageScreen.classList.remove('hidden');
-        this.renderStoryStages(displayStages);
-        const firstStage = displayStages[0];
-        if (this.dom.storyStageTitle) this.dom.storyStageTitle.textContent = firstStage?.name || 'ステージを えらぶ';
-        if (this.dom.storyStageDesc) {
-            this.dom.storyStageDesc.textContent = firstStage?.description || 'ステージを えらぶと ここに じょうほうが ひょうじされます。';
-        }
-        this.recordScreen('story-stage-select');
-        if (firstStage) {
-            this.handleStoryStageSelect(firstStage.id, { openModal: false });
-        }
-        this.updateStoryBoxSlots();
-        this.updatePokemonBoxButtonState();
-        this.updateGetStageButtonState();
+        this.storyManager.showStoryStageScreen(stages);
     },
 
     handleStoryStageSelect(stageId, { openModal = true } = {}) {
-        if (!stageId || !this.storyStageList.length || !this.dom.storyStageGrid) return;
-        const stage = this.storyStageList.find(s => s.id === stageId);
-        if (!stage) return;
-        const reward = this.loader.getStageReward(stageId);
-        this.getStageModalData = reward;
-        this.selectedGetStageRewardIndex = null;
-        this.storySelectedStageId = stageId;
-        if (this.dom.storyStageTitle) this.dom.storyStageTitle.textContent = stage.name;
-        if (this.dom.storyStageDesc) this.dom.storyStageDesc.textContent = stage.description;
-        this.dom.storyStageGrid.querySelectorAll('.story-stage-block').forEach(block => {
-            block.classList.toggle('selected', block.dataset.stageId === stageId);
-        });
-        this.updateGetStageButtonState();
-
-        const stageType = (stage.type || '').toUpperCase();
-        const hasReward = Boolean(reward && reward.rewardSlots && reward.rewardSlots.length);
-        const alreadyClaimed = reward && this.hasCollectedStage(reward.stageId);
-        const canOpenGetModal = stageType === 'GET' && hasReward && !stage.isLocked && !alreadyClaimed;
-        if (canOpenGetModal && openModal) {
-            this.handleGetStageButtonClick();
-        }
+        this.storyManager.handleStoryStageSelect(stageId, { openModal });
     },
 
     renderStoryStages(stages = []) {
-        if (!this.dom.storyStageGrid) return;
-        const displayStages = Array.isArray(stages) ? stages : [];
-        if (!displayStages.length) {
-            this.dom.storyStageGrid.innerHTML = '<p class="text-center text-sm text-slate-500">表示できるステージが ありません。</p>';
-            return;
-        }
-        this.dom.storyStageGrid.innerHTML = displayStages.map((stage) => {
-            const stageIdLabel = stage.id ? stage.id.split('_').pop()?.padStart(2, '0') : '00';
-            const stageName = stage.name || 'ステージ';
-            const locked = Boolean(stage.isLocked);
-            const stageType = stage.type ? stage.type.toUpperCase() : 'STAGE';
-            const description = locked ? '' : (stage.description || 'じゅんびちゅうの ステージです。');
-            const statusLabel = locked ? 'ロック中' : 'プレイ可能';
-            return `
-            <button type="button" class="story-stage-block${locked ? ' locked' : ''}" data-stage-id="${stage.id || ''}" aria-label="${stageName} (${statusLabel})" ${locked ? 'disabled' : ''}>
-                <div class="story-stage-card">
-                    <div class="story-stage-card-header">
-                        <span class="story-stage-card-id">ST_${stageIdLabel}</span>
-                        <span class="story-stage-card-type">${stageType}</span>
-                    </div>
-                    <h4 class="story-stage-card-title">${stageName}</h4>
-                    ${description ? `<p class="story-stage-card-summary">${description}</p>` : ''}
-                    <span class="story-stage-card-state${locked ? ' locked' : ''}">${statusLabel}</span>
-                </div>
-            </button>
-            `;
-        }).join('');
-        this.dom.storyStageGrid.querySelectorAll('.story-stage-block').forEach(block => {
-            block.onclick = () => this.handleStoryStageSelect(block.dataset.stageId);
-        });
+        this.storyManager.renderStoryStages(stages);
     },
 
     saveStoryProgress() {
@@ -839,8 +807,18 @@ const App = {
             clearedStages: Array.from(this.clearedStages),
             defeatedPokemonIds: Array.from(this.defeatedPokemonIds),
             capturedPokemonIds: Array.from(this.capturedPokemonIds),
+            battleDefeatedPokemonIds: Array.from(this.battleDefeatedPokemonIds || []),
+            battleCapturedPokemonIds: Array.from(this.battleCapturedPokemonIds || []),
             storyItems: Array.from(this.storyItems),
-            lastPlayed: Date.now()
+            lastPlayed: Date.now(),
+            ownedPokemonData: this.storyOwnedPokemonDetails.map(pk => ({
+                uuid: pk.uuid,
+                id: pk['図鑑No'],
+                level: pk['獲得レベル'] || pk.level,
+                exp: pk.exp,
+                nickname: pk.nickname
+            })),
+            currentParty: this.storyPartySlots
         });
     },
 
@@ -848,7 +826,7 @@ const App = {
         const btn = this.dom.getStageBtn;
         if (!btn) return;
         const reward = this.getStageModalData;
-        const stage = this.storyStageList.find(s => s.id === this.storySelectedStageId);
+        const stage = this.storyManager.storyStageList.find(s => s.id === this.storySelectedStageId);
         const hasReward = Boolean(reward && reward.rewardSlots && reward.rewardSlots.length);
         const unlocked = stage && !stage.isLocked;
         const alreadyClaimed = reward && this.hasCollectedStage(reward.stageId);
@@ -936,12 +914,23 @@ const App = {
         slots.forEach(slot => this.applyGetStageReward(slot));
         this.storyItems.add(reward.stageId);
         this.clearedStages.add(reward.stageId);
-        this.saveStoryProgress();
-        alert(`ステージ ${reward.stageName} の ほうびを うけとった！`);
-        this.closeGetStageModal();
+
+        // ボックスを更新（ポケモン情報を反映）
         this.updateStoryBoxSlots();
         this.updatePokemonBoxButtonState();
+
+        // セーブ（ポケモン情報を含む）
+        this.saveStoryProgress();
+
+        alert(`ステージ ${reward.stageName} の ほうびを うけとった！`);
+        this.closeGetStageModal();
         this.updateGetStageButtonState();
+
+        // ステージ一覧を再描画してアンロック状態を反映
+        this.storyManager.refreshStoryStageScreen();
+
+        // デバッグ: アンロック状態を確認
+        console.log('[confirmGetStageReward] clearedStages:', Array.from(this.clearedStages));
     },
 
     applyGetStageReward(slot) {
@@ -949,75 +938,577 @@ const App = {
         if (slot.type === 'POKEMON') {
             const pokemon = this.loader.getPokemonDetails(slot.name);
             if (pokemon) {
-                this.markCapturedPokemon(String(pokemon['図鑑No']));
+                // level付きでポケモンを追加
+                this.addPokemonToStory(String(pokemon['図鑑No']), pokemon, slot.level || 5);
             }
         } else if (slot.type === 'ITEM') {
             alert(`${slot.name} を てにいれた！`);
         }
     },
 
-    saveStoryProgress() {
-        this.saveManager.saveSlot(this.currentSlotId, {
-            clearedStages: Array.from(this.clearedStages),
-            defeatedPokemonIds: Array.from(this.defeatedPokemonIds),
-            capturedPokemonIds: Array.from(this.capturedPokemonIds),
-            storyItems: Array.from(this.storyItems),
-            lastPlayed: Date.now()
+    addPokemonToStory(pokemonId, pokemonDetails, level, nickname = null) {
+        if (!pokemonId || !pokemonDetails) return;
+
+        // capturedPokemonIds に追加 (図鑑登録用)
+        this.capturedPokemonIds.add(pokemonId);
+
+        // 重複チェックは行わず、個体として追加
+        const uuid = this.generateUUID();
+
+        this.storyOwnedPokemonDetails.push({
+            ...pokemonDetails,
+            '獲得レベル': level || 5,
+            exp: ExpTable.getExpForLevel(level || 5),
+            uuid: uuid,
+            nickname: nickname || ''
         });
     },
+
+
 
     hasCollectedStage(stageId) {
         return this.storyItems.has(stageId);
     },
 
+    showTrainerBattleModal(stageId, stage) {
+        const trainerData = this.loader.getTrainerByStageId(stageId);
+        if (!trainerData || !trainerData.party || !trainerData.party.length) {
+            alert('トレーナー情報が みつかりません。');
+            return;
+        }
+
+        this.currentTrainerData = trainerData;
+        this.currentTrainerStageId = stageId;
+
+        if (this.dom.trainerBattleTitle) {
+            this.dom.trainerBattleTitle.textContent = trainerData.name || 'トレーナー';
+        }
+        if (this.dom.trainerBattleStageName) {
+            this.dom.trainerBattleStageName.textContent = stage.name || '';
+        }
+        if (this.dom.trainerBattleMessage) {
+            this.dom.trainerBattleMessage.textContent = `「${trainerData.message_start}」`;
+        }
+
+        if (this.dom.trainerPokemonList) {
+            const pokemonHtml = trainerData.party.map(pkData => {
+                const pokemon = this.loader.getPokemonDetails(pkData.name);
+                if (!pokemon) return '';
+                const spriteUrl = Utils.getSpriteUrl(pokemon['図鑑No']);
+                return `
+                    <div class="bg-white border border-slate-200 rounded-lg p-2 flex flex-col items-center">
+                        <img src="${spriteUrl}" alt="${pokemon.name}" class="pixel-art h-12 w-12">
+                        <span class="text-xs font-bold text-slate-700">${pokemon.name}</span>
+                        <span class="text-[10px] text-slate-500">Lv.${pkData.level}</span>
+                    </div>
+                `;
+            }).join('');
+            this.dom.trainerPokemonList.innerHTML = pokemonHtml;
+        }
+
+        this.showFloatingModal(this.dom.trainerBattleModal);
+
+        // ボタンイベントの再設定 (WILDと共用のため)
+        const startBtn = document.getElementById('trainer-battle-start-btn');
+        if (startBtn) {
+            startBtn.onclick = () => this.startTrainerBattle();
+            startBtn.textContent = 'バトルする';
+        }
+        // Chain Config non-display
+        const chainConfig = document.getElementById('battle-chain-config');
+        if (chainConfig) chainConfig.classList.add('hidden');
+    },
+
+    showWildDetailModal(stageId, stage) {
+        const encounters = this.loader.getWildEncounter(stageId);
+        if (!encounters || encounters.length === 0) {
+            alert('このエリアには ポケモンが いないようだ……');
+            return;
+        }
+
+        this.currentTrainerData = null; // トレーナーデータではない
+        this.currentTrainerStageId = stageId; // ステージIDは保持（startWildBattleで使うかも）
+
+        if (this.dom.trainerBattleTitle) {
+            this.dom.trainerBattleTitle.textContent = '野生のポケモン';
+        }
+        if (this.dom.trainerBattleStageName) {
+            this.dom.trainerBattleStageName.textContent = stage.name || '';
+        }
+        if (this.dom.trainerBattleMessage) {
+            this.dom.trainerBattleMessage.textContent = stage.description || 'くさむらを たんさく しますか？';
+        }
+
+        // 出現率計算
+        let totalRate = 0;
+        encounters.forEach(e => totalRate += (parseInt(e.rate) || 0));
+
+        if (this.dom.trainerPokemonList) {
+            const pokemonHtml = encounters.map(enc => {
+                const pokemon = this.loader.getPokemonDetails(enc.pokemon_name);
+                if (!pokemon) return '';
+                const spriteUrl = Utils.getSpriteUrl(pokemon['図鑑No']);
+                const rate = parseInt(enc.rate) || 0;
+                const percent = totalRate > 0 ? Math.round((rate / totalRate) * 100) : 0;
+
+                return `
+                    <div class="bg-white border border-slate-200 rounded-lg p-2 flex flex-col items-center min-w-[80px]">
+                        <img src="${spriteUrl}" alt="${pokemon['名前（日本語）']}" class="pixel-art h-12 w-12 object-contain">
+                        <span class="text-xs font-bold text-slate-700 mt-1">${pokemon['名前（日本語）']}</span>
+                        <span class="text-[10px] text-slate-500">Lv.${enc.min_lv}-${enc.max_lv}</span>
+                        <span class="text-[10px] text-blue-600 font-bold mt-1">${percent}%</span>
+                    </div>
+                `;
+            }).join('');
+            this.dom.trainerPokemonList.innerHTML = pokemonHtml;
+        }
+
+        this.showFloatingModal(this.dom.trainerBattleModal);
+
+        const chainConfig = document.getElementById('battle-chain-config');
+        if (chainConfig) {
+            chainConfig.classList.remove('hidden');
+            const input = document.getElementById('battle-chain-count');
+            if (input) input.value = 1;
+        }
+
+        const startBtn = document.getElementById('trainer-battle-start-btn');
+        if (startBtn) {
+            startBtn.onclick = () => {
+                const chainInput = document.getElementById('battle-chain-count');
+                this.wildChainCount = chainInput ? (parseInt(chainInput.value) || 1) : 1;
+                this.currentWildStage = stage; // Store stage for chain
+                this.closeTrainerBattleModal();
+                this.startWildBattle(stageId, stage);
+            };
+            startBtn.textContent = 'たんさくする';
+        }
+    },
+
+    closeTrainerBattleModal() {
+        if (!this.dom.trainerBattleModal) return;
+        this.hideFloatingModal(this.dom.trainerBattleModal);
+        this.currentTrainerData = null;
+        this.currentTrainerStageId = null;
+    },
+
+    async startTrainerBattle() {
+        if (!this.currentTrainerData || !this.currentTrainerStageId) return;
+
+        const trainerData = this.currentTrainerData;
+        const stageId = this.currentTrainerStageId;
+
+        // パーティチェック (UUIDベース)
+        const validPartyUuids = this.storyPartySlots.filter(uuid => uuid);
+        if (validPartyUuids.length === 0) {
+            alert('パーティに ポケモンが いません！');
+            return;
+        }
+
+        // UUIDから実体を取得してパーティ構築
+        this.currentParty = validPartyUuids.map(uuid => {
+            const owned = this.storyOwnedPokemonDetails.find(pk => pk.uuid === uuid);
+            if (!owned) return null;
+            // BattleManager用のデータ構造に変換 (基本データ + 個体データ)
+            const baseData = this.loader.getPokemonDetails(owned['図鑑No']);
+            return {
+                ...baseData,
+                uuid: owned.uuid,
+                level: owned['獲得レベル'] || 5,
+                nickname: owned.nickname
+            };
+        }).filter(Boolean);
+
+        if (this.currentParty.length === 0) {
+            alert('バトル可能な ポケモンが いません！');
+            return;
+        }
+
+        const enemyParty = trainerData.party.map(pkData => {
+            const pokemon = this.loader.getPokemonDetails(pkData.name);
+            if (!pokemon) return null;
+            return { ...pokemon, level: pkData.level };
+        }).filter(Boolean);
+
+        if (enemyParty.length === 0) {
+            alert('相手のポケモンが 見つかりません！');
+            return;
+        }
+
+        this.closeTrainerBattleModal();
+
+        this.hideAllScreens();
+        this.dom.battleScreen.classList.remove('hidden');
+        this.recordScreen('battle');
+        this.dom.keyboard.classList.remove('translate-y-full');
+        if (this.dom.keyboardColumn) this.dom.keyboardColumn.classList.remove('hidden');
+
+        const bgmType = trainerData.stage_id && trainerData.stage_id.includes('GYM') ? 'battle_trainer' : 'battle_rival';
+        this.audio.playBgm(bgmType);
+
+        this.battle = new BattleManager(
+            this.currentParty, // レベル等はすでに含まれている
+            this.currentParty[0].level,
+            enemyParty.map((p, idx) => ({ ...p, level: trainerData.party[idx].level })),
+            trainerData.party[0].level,
+            this.typing,
+            this.loader.itemList,
+            {
+                isTrainerBattle: true,
+                trainerData: trainerData
+            }
+        );
+
+        this.battle.onUpdateUI = (p, e) => this.updateBattleUI(p, e);
+        this.battle.onPokemonChange = (type, player, enemy) => {
+            this.clearCaptureVisuals();
+            this.setBattleSprite(this.dom.playerSpriteContainer, player['図鑑No'], true);
+            this.setBattleSprite(this.dom.enemySpriteContainer, enemy['図鑑No'], false);
+        };
+        this.battle.onEffect = (effect, target) => {
+            if (['attack', 'damage', 'fainted'].includes(effect)) this.triggerAnimation(effect, target);
+            if (effect === 'damage') this.audio.playSe('attack');
+        };
+        this.battle.onMessage = (msg, type) => this.handleBattleMessage(msg, type);
+        this.battle.onPhaseChange = (phase) => this.updatePhaseUI(phase);
+        this.battle.onMoveSelect = (move) => this.displaySelectedMove(move);
+        this.battle.onBattleEnd = (res) => {
+            this.handleTrainerBattleEnd(res, stageId, trainerData);
+        };
+        this.battle.onEnemyDefeat = (enemy) => {
+            const id = enemy && enemy['図鑑No'];
+            if (id) this.markDefeatedPokemon(id);
+        };
+
+        this.battle.start();
+    },
+
+    gainExp(expAmount) {
+        if (!expAmount || expAmount <= 0) return;
+
+        let levelUpMessages = [];
+
+        // パーティ全員に経験値を付与 (学習装置仕様)
+        this.currentParty.forEach(member => {
+            if (!member || !member.uuid) return;
+
+            const ownedPk = this.storyOwnedPokemonDetails.find(pk => pk.uuid === member.uuid);
+            if (!ownedPk) return;
+
+            if (!ownedPk.exp) ownedPk.exp = ExpTable.getExpForLevel(ownedPk['獲得レベル'] || 5);
+
+            ownedPk.exp += expAmount;
+            const oldLevel = ownedPk['獲得レベル'] || 5;
+            const newLevel = ExpTable.getLevelFromExp(ownedPk.exp);
+
+            if (newLevel > oldLevel) {
+                ownedPk['獲得レベル'] = newLevel;
+                const name = ownedPk.nickname || ownedPk['名前（日本語）'];
+                levelUpMessages.push(`${name} は レベル${newLevel} に あがった！`);
+            }
+        });
+
+        // メッセージ表示
+        let msg = `手持ちの ポケモンたちは ${expAmount} けいけんちを もらった！`;
+        if (levelUpMessages.length > 0) {
+            msg += '\n' + levelUpMessages.join('\n');
+            this.audio.playSe('select');
+        }
+        alert(msg);
+    },
+
+    handleTrainerBattleEnd(result, stageId, trainerData) {
+        const win = result === 'win';
+        setTimeout(() => {
+            if (win) {
+                this.clearedStages.add(stageId);
+
+                // 経験値処理
+                let earnedExp = 0;
+                if (trainerData && trainerData.party) {
+                    // トレーナー戦: 敵レベル合計 * 15
+                    earnedExp = trainerData.party.reduce((sum, p) => sum + ((p.level || 5) * 15), 0);
+                }
+                this.gainExp(earnedExp);
+
+                this.saveStoryProgress();
+                alert(`${trainerData.name} との バトルに かった！`);
+
+                this.storyManager.refreshStoryStageScreen();
+            } else {
+                alert('まけちゃった... つぎは がんばろう！');
+            }
+            this.storyManager.refreshStoryStageScreen();
+        }, 1500);
+    },
+
+    startWildBattle(stageId, stage, reuseParty = false) {
+        if (!stageId) return;
+
+        // パーティチェック (UUID)
+        const validPartyUuids = this.storyPartySlots.filter(uuid => uuid);
+        if (validPartyUuids.length === 0) {
+            alert('パーティに ポケモンが いません！');
+            console.log('No party members found');
+            return;
+        }
+
+        // 野生エンカウントデータの取得
+        const encounters = this.loader.getWildEncounter(stageId);
+        if (!encounters || encounters.length === 0) {
+            alert('このエリアには ポケモンが いないようだ……');
+            console.log('No encounters found for stage:', stageId);
+            return;
+        }
+
+        // 確率によるポケモン決定 (reusePartyでも敵は再抽選)
+        let totalRate = 0;
+        encounters.forEach(e => totalRate += (parseInt(e.rate) || 0));
+        let rand = Math.floor(Math.random() * totalRate);
+        let selectedEncounter = encounters[0];
+        for (const enc of encounters) {
+            const r = parseInt(enc.rate) || 0;
+            if (rand < r) {
+                selectedEncounter = enc;
+                break;
+            }
+            rand -= r;
+        }
+
+        const enemyPokemon = this.loader.getPokemonDetails(selectedEncounter.pokemon_name);
+        if (!enemyPokemon) {
+            console.error('Pokemon data not found:', selectedEncounter.pokemon_name);
+            return;
+        }
+
+        const minLv = parseInt(selectedEncounter.min_lv) || 2;
+        const maxLv = parseInt(selectedEncounter.max_lv) || 5;
+        const enemyLevel = Math.floor(Math.random() * (maxLv - minLv + 1)) + minLv;
+
+        // 味方パーティの準備
+        if (!reuseParty) {
+            this.currentParty = validPartyUuids.map(uuid => {
+                const owned = this.storyOwnedPokemonDetails.find(pk => pk.uuid === uuid);
+                if (!owned) return null;
+                const baseData = this.loader.getPokemonDetails(owned['図鑑No']);
+                return {
+                    ...baseData,
+                    uuid: owned.uuid,
+                    level: owned['獲得レベル'] || 5,
+                    nickname: owned.nickname
+                };
+            }).filter(Boolean);
+        }
+
+        if (this.currentParty.length === 0) return;
+        // HPチェック: 全員瀕死なら続行不可
+        if (this.currentParty.every(p => (p.currentHp !== undefined ? p.currentHp : 999) <= 0)) {
+            alert('たたかえる ポケモンが いません！');
+            this.wildChainCount = 0;
+            this.storyManager.refreshStoryStageScreen();
+            return;
+        }
+
+        if (this.currentParty.length === 0) return;
+
+        // 画面遷移
+        this.hideAllScreens();
+        this.dom.battleScreen.classList.remove('hidden');
+        this.recordScreen('battle');
+        this.dom.keyboard.classList.remove('translate-y-full');
+        if (this.dom.keyboardColumn) this.dom.keyboardColumn.classList.remove('hidden');
+
+        this.audio.playBgm('battle_wild');
+
+        // BattleManager初期化
+        this.battle = new BattleManager(
+            this.currentParty,
+            this.currentParty[0].level,
+            [{ ...enemyPokemon, level: enemyLevel }],
+            enemyLevel,
+            this.typing,
+            this.loader.itemList,
+            {
+                isTrainerBattle: false,
+                startMessage: `あ！ やせいの ${enemyPokemon['名前（日本語）']} が とびだしてきた！`
+            }
+        );
+
+        this.setupBattleCallbacks();
+        this.battle.onBattleEnd = (res) => {
+            this.handleWildBattleEnd(res, stageId, enemyLevel);
+        };
+
+        this.battle.start();
+    },
+
+    setupBattleCallbacks() {
+        this.battle.onUpdateUI = (p, e) => this.updateBattleUI(p, e);
+        this.battle.onPokemonChange = (type, player, enemy) => {
+            this.clearCaptureVisuals();
+            this.setBattleSprite(this.dom.playerSpriteContainer, player['図鑑No'], true);
+            this.setBattleSprite(this.dom.enemySpriteContainer, enemy['図鑑No'], false);
+        };
+        this.battle.onEffect = (effect, target) => {
+            if (['attack', 'damage', 'fainted'].includes(effect)) this.triggerAnimation(effect, target);
+            if (effect === 'damage') this.audio.playSe('attack');
+            if (effect === 'ball-throw') this.triggerBallThrow();
+            if (effect === 'ball-shake') this.triggerBallShake();
+            if (effect === 'ball-captured') this.triggerBallCaptured();
+            if (effect === 'ball-escape') this.triggerBallEscape();
+        };
+        this.battle.onMessage = (msg, type) => this.handleBattleMessage(msg, type);
+        this.battle.onPhaseChange = (phase) => this.updatePhaseUI(phase);
+        this.battle.onMoveSelect = (move) => this.displaySelectedMove(move);
+        this.battle.onEnemyDefeat = (enemy) => {
+            const id = enemy && enemy['図鑑No'];
+            if (id) this.markDefeatedPokemon(id);
+        };
+        this.battle.onEnemyCapture = (enemy) => {
+            const id = enemy && enemy['図鑑No'];
+            if (id) this.markCapturedPokemon(id);
+        };
+    },
+
+    handleWildBattleEnd(result, stageId, enemyLevel) {
+        const win = result === 'win' || result === 'catch';
+        setTimeout(() => {
+            if (win) {
+                // 初クリア時のみクリア扱いにするなら条件分岐、野生は何度でもクリア扱い更新でOK
+                this.clearedStages.add(stageId);
+
+                // 経験値: (敵レベル * 10) 程度
+                const earnedExp = (enemyLevel || 5) * 10;
+
+                // 捕獲時の処理
+                if (result === 'catch') {
+                    const enemy = this.battle.enemyParty[0]; // 野生は1体
+                    if (enemy) {
+                        let nickname = '';
+                        if (confirm('ニックネームを つけますか？')) {
+                            nickname = prompt('ニックネームを いれてください', enemy['名前（日本語）']) || '';
+                        }
+                        this.addPokemonToStory(String(enemy['図鑑No']), enemy, enemyLevel, nickname);
+                    }
+                    alert('ポケモンを つかまえた！ やったね！');
+                } else {
+                    alert('やせいの ポケモンに かった！');
+                }
+
+                this.gainExp(earnedExp);
+
+                this.saveStoryProgress();
+
+                // Chain Battle Check
+                this.wildChainCount = (this.wildChainCount || 1) - 1;
+
+                // Sync HP from battle to currentParty
+                if (this.battle && this.battle.party) {
+                    this.battle.party.forEach(member => {
+                        const original = this.currentParty.find(p => p.uuid === member.uuid);
+                        if (original) {
+                            original.currentHp = member.hp;
+                            original.isFainted = member.hp <= 0;
+                        }
+                    });
+                }
+                const hasAlive = this.currentParty.some(p => (p.currentHp !== undefined ? p.currentHp : 999) > 0);
+
+                if (win && this.wildChainCount > 0 && hasAlive) {
+                    // Next Battle
+                    setTimeout(() => {
+                        this.startWildBattle(stageId, this.currentWildStage, true);
+                    }, 1000);
+                    return; // Skip screen refresh
+                }
+
+                this.storyManager.refreshStoryStageScreen();
+            } else {
+                alert('まけちゃった... つぎは がんばろう！');
+                this.wildChainCount = 0; // Stop chain on loss
+                this.storyManager.refreshStoryStageScreen();
+            }
+        }, 1500);
+    },
+
     updateStoryBoxSlots(forcePartyReset = false) {
-        const slotList = this.storyOwnedPokemonDetails.map(pk => {
+        // 全所持ポケモンリスト (UUID付き)
+        const allOwned = this.storyOwnedPokemonDetails.map(pk => {
             const dexNo = String(pk['図鑑No']);
             return {
+                uuid: pk.uuid,
                 id: dexNo,
                 name: pk['名前（日本語）'],
-                sprite: this.getSpriteUrl(dexNo)
+                nickname: pk.nickname || '',
+                level: pk['獲得レベル'] || 5, // 表示用
+                sprite: Utils.getSpriteUrl(dexNo)
             };
         });
-        this.storyBoxSlots = slotList.slice(0, this.STORY_BOX_CAPACITY);
+
+        // パーティ初期化orリセット
+        if (!this.storyPartyInitialized || forcePartyReset) {
+            // 全員ボックス候補からランダムに、または先頭から詰める
+            // ここでは簡単のため「所持リストの先頭から最大6匹」をパーティにする
+            const partyCandidates = allOwned.slice(0, 6);
+            this.storyPartySlots = Array.from({ length: 6 }, (_, i) => partyCandidates[i] ? partyCandidates[i].uuid : null);
+            this.storyPartyInitialized = true;
+        }
+
+        // パーティにいるポケモンを除外してボックスリストを作成
+        // storyPartySlotsには uuid が入っている前提
+        const boxCandidates = allOwned.filter(pk => !this.storyPartySlots.includes(pk.uuid));
+
+        // ボックススロットを埋める
+        this.storyBoxSlots = boxCandidates.slice(0, this.STORY_BOX_CAPACITY);
         while (this.storyBoxSlots.length < this.STORY_BOX_CAPACITY) {
             this.storyBoxSlots.push(null);
         }
 
-        const availableIds = Array.from(new Set(this.storyBoxSlots
-            .filter(slot => slot && slot.id)
-            .map(slot => slot.id)
-        ));
+        // パーティスロットの整合性チェック（存在しないUUIDがあれば除去）
+        this.storyPartySlots = this.storyPartySlots.map(uuid => {
+            if (!uuid) return null;
+            return this.storyOwnedPokemonDetails.some(pk => pk.uuid === uuid) ? uuid : null;
+        });
 
-        if (!this.storyPartyInitialized || forcePartyReset) {
-            this.redistributeStoryParty(availableIds);
-            this.storyPartyInitialized = true;
-        } else {
-            this.storyPartySlots = this.storyPartySlots.map(id => {
-                if (!id) return null;
-                return this.storyBoxSlots.some(slot => slot && slot.id === id) ? id : null;
+        // 穴埋めはしない（手持ちが空でもボックスから勝手に移動させない方が一般的だが、
+        // もし「手持ちが減ったら補充」という仕様ならここでやる。
+        // 元のコードは補充していたので、補充ロジックを入れる）
+        let emptySlotCount = this.storyPartySlots.filter(s => !s).length;
+        if (emptySlotCount > 0 && boxCandidates.length > 0) {
+            // ボックスから補充するよりは、単にnullのままにするか？
+            // ユーザーリクエスト「手持ちに入れたポケモンはボックスに表示させない」
+            // Box -> Party移動機能がないと詰むので、ここでは自動補充を入れておく
+            // ただし boxCandidates はすでに除外済みなので、再計算が必要
+            // いや、boxCandidatesにあるやつはパーティにいないやつだから、そこから補充すればいい
+            // しかし this.storyBoxSlots はすでにセットした。
+            // 複雑になるので、「パーティから消えたらnullのまま」とし、
+            // ボックス画面で入れ替え機能を実装するのが筋だが、
+            // 入れ替え機能実装までは自動補充で凌ぐ
+            const availableForFill = allOwned.filter(pk => !this.storyPartySlots.includes(pk.uuid));
+
+            this.storyPartySlots = this.storyPartySlots.map(uuid => {
+                if (uuid) return uuid;
+                const fill = availableForFill.shift();
+                return fill ? fill.uuid : null;
             });
-            let fillable = availableIds.filter(id => id && !this.storyPartySlots.includes(id));
-            this.storyPartySlots = this.storyPartySlots.map(id => {
-                if (id) return id;
-                return fillable.shift() || null;
-            });
-            while (this.storyPartySlots.length < 6) this.storyPartySlots.push(null);
+
+            // 再度ボックスリスト更新
+            const finalBoxCandidates = allOwned.filter(pk => !this.storyPartySlots.includes(pk.uuid));
+            this.storyBoxSlots = finalBoxCandidates.slice(0, this.STORY_BOX_CAPACITY);
+            while (this.storyBoxSlots.length < this.STORY_BOX_CAPACITY) {
+                this.storyBoxSlots.push(null);
+            }
         }
 
         if (this.storyBoxViewActive) {
-            this.renderStoryBoxList();
+            this.renderStoryPokemonBox();
         }
     },
 
     redistributeStoryParty(availableIds = null) {
-        const partySize = 6;
-        const ids = Array.from(new Set((availableIds && availableIds.length)
-            ? availableIds
-            : this.storyBoxSlots.filter(slot => slot && slot.id).map(slot => slot.id)
-        ));
-        const randomized = this.shuffleArray(ids);
-        this.storyPartySlots = Array.from({ length: partySize }, (_, index) => randomized[index] || null);
+        // 何もしない（updateStoryBoxSlots内で処理統合）
+        // 互換性維持のためメソッドだけ残すか、削除してもよいが
+        // 呼び出し元(updateStoryBoxSlots)を書き換えたので不要になるはず
     },
 
     shuffleArray(list) {
@@ -1106,19 +1597,25 @@ const App = {
 
     renderStoryPokemonParty() {
         if (!this.dom.storyPokemonParty) return;
-        const html = this.storyPartySlots.map((id, index) => {
-            const pokemon = id ? this.loader.getPokemonDetails(id) : null;
+        const html = this.storyPartySlots.map((uuid, index) => {
+            const pokemon = uuid ? this.storyOwnedPokemonDetails.find(pk => pk.uuid === uuid) : null;
             const isSelected = this.storyPokemonBoxSelection?.type === 'party' && this.storyPokemonBoxSelection?.index === index;
+            const displayName = pokemon ? (pokemon.nickname || pokemon['名前（日本語）']) : `${index + 1}ぴきめ`;
+            const level = pokemon ? `Lv.${pokemon['獲得レベル'] || 5}` : '';
+
             return `
                 <button type="button"
                     class="story-pokemon-party-slot${!pokemon ? ' story-pokemon-party-slot-placeholder' : ''}${isSelected ? ' selected' : ''}"
                     data-type="party"
                     data-index="${index}"
-                    data-id="${pokemon ? pokemon['図鑑No'] : ''}"
-                    aria-label="${pokemon ? pokemon['名前（日本語）'] : `${index + 1}ぴきめ`}"
+                    data-uuid="${uuid || ''}"
+                    aria-label="${displayName}"
                 >
-                    ${pokemon ? `<img src="${this.getSpriteUrl(pokemon['図鑑No'])}" alt="${pokemon['名前（日本語）']}" class="pixel-art">` : ''}
-                    <span>${pokemon ? pokemon['名前（日本語）'] : `${index + 1}ぴきめ`}</span>
+                    ${pokemon ? `<img src="${Utils.getSpriteUrl(pokemon['図鑑No'])}" alt="${displayName}" class="pixel-art">` : ''}
+                    <div class="flex flex-col items-start leading-tight">
+                        <span class="font-bold">${displayName}</span>
+                        <span class="text-xs text-slate-500">${level}</span>
+                    </div>
                 </button>
             `;
         }).join('');
@@ -1132,25 +1629,59 @@ const App = {
         if (!this.dom.storyPokemonBoxGrid) return;
         const html = this.storyBoxSlots.map((slot, index) => {
             const isSelected = this.storyPokemonBoxSelection?.type === 'box' && this.storyPokemonBoxSelection?.index === index;
-            const hasPokemon = Boolean(slot && slot.id);
+            const hasPokemon = Boolean(slot && slot.uuid);
+            const displayName = hasPokemon ? (slot.nickname || slot.name) : '';
+            const level = hasPokemon ? `Lv.${slot.level}` : '';
+
             return `
-                <button type="button"
-                    class="story-pokemon-box-slot${isSelected ? ' selected' : ''}${!hasPokemon ? ' story-pokemon-box-slot--empty' : ''}"
-                    data-type="box"
-                    data-index="${index}"
-                    data-id="${hasPokemon ? slot.id : ''}"
-                    aria-label="${hasPokemon ? slot.name : '空きスロット'}"
-                >
-                    ${hasPokemon ? `<img src="${slot.sprite}" alt="${slot.name}" class="pixel-art">` : ''}
-                    <span class="story-pokemon-box-slot-name">${hasPokemon ? slot.name : ''}</span>
-                    ${!hasPokemon ? '<span class="story-pokemon-box-slot-empty-label">empty</span>' : ''}
-                </button>
+                <div class="relative group">
+                    <button type="button"
+                        class="story-pokemon-box-slot${isSelected ? ' selected' : ''}${!hasPokemon ? ' story-pokemon-box-slot--empty' : ''} w-full"
+                        data-type="box"
+                        data-index="${index}"
+                        data-uuid="${hasPokemon ? slot.uuid : ''}"
+                        aria-label="${hasPokemon ? displayName : '空きスロット'}"
+                    >
+                        ${hasPokemon ? `<img src="${slot.sprite}" alt="${displayName}" class="pixel-art">` : ''}
+                        <div class="story-pokemon-box-info flex flex-col items-center">
+                            <span class="story-pokemon-box-slot-name text-xs font-bold truncate w-full text-center">${displayName}</span>
+                            <span class="text-[10px] text-slate-500">${level}</span>
+                        </div>
+                        ${!hasPokemon ? '<span class="story-pokemon-box-slot-empty-label">empty</span>' : ''}
+                    </button>
+                    ${hasPokemon ? `
+                    <button type="button" class="absolute top-0 right-0 p-1 bg-white/90 rounded-full shadow hover:bg-white transition-colors z-10"
+                        onclick="window.app.promptRename('${slot.uuid}')"
+                        title="名前を変える">
+                        <svg class="w-3 h-3 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                    </button>
+                    ` : ''}
+                </div>
             `;
         }).join('');
         this.dom.storyPokemonBoxGrid.innerHTML = html;
-        this.dom.storyPokemonBoxGrid.querySelectorAll('button').forEach(button => {
+
+        // メインのボタンイベント設定
+        this.dom.storyPokemonBoxGrid.querySelectorAll('button.story-pokemon-box-slot').forEach(button => {
             button.onclick = () => this.handleStoryPokemonSlotClick('box', Number(button.dataset.index));
         });
+
+        // global scope hack for inline onclick (safe enough for this scale)
+        if (!window.app) window.app = this;
+    },
+
+    promptRename(uuid) {
+        if (!uuid) return;
+        const pokemon = this.storyOwnedPokemonDetails.find(pk => pk.uuid === uuid);
+        if (!pokemon) return;
+
+        const newName = prompt(`${pokemon['名前（日本語）']} の ニックネームを いれてください`, pokemon.nickname || '');
+        if (newName !== null) {
+            pokemon.nickname = newName.trim();
+            this.saveStoryProgress();
+            this.updateStoryBoxSlots();
+            this.renderStoryPokemonParty(); // 名前反映のため
+        }
     },
 
     handleStoryPokemonSlotClick(type, index) {
@@ -1170,26 +1701,56 @@ const App = {
         }
         this.swapStoryPokemonSlots(previous, { type, index });
         this.storyPokemonBoxSelection = null;
-        this.renderStoryPokemonParty();
-        this.renderStoryPokemonBox();
+        this.renderStoryPokemonParty(); // 反映
+        this.renderStoryPokemonBox();  // 反映
     },
 
     swapStoryPokemonSlots(a, b) {
         if (!a || !b) return;
-        const getId = (slot) => slot.type === 'party'
-            ? this.storyPartySlots[slot.index]
-            : this.storyBoxSlots[slot.index]?.id;
-        const setId = (slot, id) => {
-            if (slot.type === 'party') {
-                this.storyPartySlots[slot.index] = id || null;
-            } else {
-                this.setStoryBoxSlot(slot.index, id);
-            }
+
+        // UUIDを取得
+        const getUuid = (slot) => {
+            if (slot.type === 'party') return this.storyPartySlots[slot.index];
+            if (slot.type === 'box') return this.storyBoxSlots[slot.index]?.uuid;
+            return null;
         };
-        const aId = getId(a);
-        const bId = getId(b);
-        setId(a, bId);
-        setId(b, aId);
+
+        const uuidA = getUuid(a);
+        const uuidB = getUuid(b);
+
+        // 両方 null なら何もしない
+        if (!uuidA && !uuidB) return;
+
+        // 交換処理
+        // Party同士: 単なる入れ替え
+        // Box同士: updateStoryBoxSlotsで再計算されるので意味がない？いや、並び順保存してない。
+        // -> Boxはソート順(入手順?)固定なら入れ替え不能。
+        // -> ユーザー要望は「手持ちに入れたのをボックスに出さない」。
+        // -> 今回は Party <-> Box の移動が主眼。
+
+        if (a.type === 'party' && b.type === 'party') {
+            [this.storyPartySlots[a.index], this.storyPartySlots[b.index]] = [this.storyPartySlots[b.index], this.storyPartySlots[a.index]];
+        } else if (a.type === 'box' && b.type === 'box') {
+            // Box内の並び替えは未実装（ソート順固定のため）
+            alert('ボックス内の 並び替えは できません');
+            return;
+        } else {
+            // Party <-> Box
+            // Partyスロットを書き換えるだけで、Box側は自動的に「Partyから外れたら出現」「Partyに入ったら消失」する
+            const partySlot = a.type === 'party' ? a : b;
+            const boxSlot = a.type === 'box' ? a : b;
+
+            const partyUuid = getUuid(partySlot); // 今パーティにいるやつ
+            const boxUuid = getUuid(boxSlot);     // 今ボックスにいるやつ
+
+            // boxUuidをパーティに入れる（partyUuidはパーティから消える→ボックスへ）
+            this.storyPartySlots[partySlot.index] = boxUuid;
+
+            // ボックス再計算
+            this.updateStoryBoxSlots();
+        }
+
+        this.saveStoryProgress();
     },
 
     setStoryBoxSlot(index, id) {
@@ -1206,21 +1767,11 @@ const App = {
         this.storyBoxSlots[index] = {
             id: String(pokemon['図鑑No']),
             name: pokemon['名前（日本語）'],
-            sprite: this.getSpriteUrl(pokemon['図鑑No'])
+            sprite: Utils.getSpriteUrl(pokemon['図鑑No'])
         };
     },
 
-    attachStoryRegionCardHandlers() {
-        const cards = document.querySelectorAll('#story-region-select-screen .region-card');
-        cards.forEach(card => card.onclick = null);
-        cards.forEach(card => {
-            if (!card.disabled) {
-                card.addEventListener('click', () => this.handleStoryRegionSelect(card.dataset.region));
-            } else {
-                card.onclick = null;
-            }
-        });
-    },
+
 
     renderPartySelect() {
         const totalPages = this.getPartyPageCount();
@@ -1239,7 +1790,7 @@ const App = {
                     </div>
                     <div class="party-card-body">
                         <div class="party-pokemon-grid">
-                            ${p.ids.map(id => `<img src="${this.getSpriteUrl(id)}" class="pixel-art" alt="">`).join('')}
+                            ${p.ids.map(id => `<img src="${Utils.getSpriteUrl(id)}" class="pixel-art" alt="">`).join('')}
                         </div>
                     </div>
                     <div class="party-card-footer">
@@ -1323,7 +1874,7 @@ const App = {
             if (id) {
                 const pk = this.loader.getPokemonDetails(id);
                 slot.innerHTML = `
-                    <img src="${this.getSpriteUrl(id)}" class="h-12 pixel-art">
+                    <img src="${Utils.getSpriteUrl(id)}" class="h-12 pixel-art">
                     <span class="font-bold text-[10px] text-center mt-1 truncate w-full">${pk['名前（日本語）']}</span>
                 `;
                 slot.classList.add(filledClass);
@@ -1353,13 +1904,25 @@ const App = {
         container.innerHTML = pageItems.map(p => {
             const idStr = String(p['図鑑No']);
             const isSel = selection.includes(idStr);
-            const isDefeated = side === 'enemy' && this.defeatedPokemonIds.has(idStr);
-            const trophyBadge = isDefeated ? '<span class="trophy-icon" title="たおしたポケモン">🏆</span>' : '';
-            const captureBadge = !isDefeated && side === 'enemy' && this.capturedPokemonIds.has(idStr)
+            // ストーリー/バトルで表示する進捗を分ける
+            // side === 'player' (カスタムパーティ) => ストーリーの進捗 (defeated/capturedPokemonIds)
+            // side === 'enemy' (バトルモード敵選択) => バトルの進捗 (battleDefeated/CapturedPokemonIds)
+            let hasDefeated = false;
+            let hasCaptured = false;
+
+            if (side === 'player') {
+                hasDefeated = this.defeatedPokemonIds.has(idStr);
+                hasCaptured = this.capturedPokemonIds.has(idStr);
+            } else if (side === 'enemy') {
+                hasDefeated = this.battleDefeatedPokemonIds && this.battleDefeatedPokemonIds.has(idStr);
+                hasCaptured = this.battleCapturedPokemonIds && this.battleCapturedPokemonIds.has(idStr);
+            }
+
+            const trophyBadge = hasDefeated ? '<span class="trophy-icon" title="たおしたポケモン">🏆</span>' : '';
+            const captureBadge = !hasDefeated && hasCaptured
                 ? '<span class="capture-icon" title="つかまえたポケモン">🟠</span>'
                 : '';
-            const showCapturedLabel = side === 'enemy' && this.capturedPokemonIds.has(idStr);
-            const capturedLabel = showCapturedLabel ? '<span class="poke-captured-label">GET！</span>' : '';
+            const capturedLabel = hasCaptured ? '<span class="poke-captured-label">GET！</span>' : '';
             return `
                 <div class="border rounded-lg p-1 cursor-pointer transition-all bg-white dense-pokemon-card ${isSel ? selectedClass : ''}" data-id="${p['図鑑No']}">
                     ${trophyBadge}${captureBadge}
@@ -1368,7 +1931,7 @@ const App = {
                             ${capturedLabel}
                             <span class="poke-number text-[8px] text-slate-400">No.${p['図鑑No']}</span>
                         </span>
-                        <img src="${this.getSpriteUrl(p['図鑑No'])}" class="mx-auto h-12 pixel-art" loading="lazy">
+                        <img src="${Utils.getSpriteUrl(p['図鑑No'])}" class="mx-auto h-12 pixel-art" loading="lazy">
                         <span class="poke-name text-[10px] font-bold truncate">${p['名前（日本語）']}</span>
                     </div>
                 </div>
@@ -1422,36 +1985,70 @@ const App = {
     markDefeatedPokemon(id) {
         if (!id) return;
         const key = String(id);
-        if (this.defeatedPokemonIds.has(key)) return;
-        this.defeatedPokemonIds.add(key);
-        if (!this.dom.enemySelectScreen.classList.contains('hidden')) {
+
+        let changed = false;
+        // モード判定: this.currentMode があるか、あるいは currentTrainerData 等で判定
+        // handleModeSelectで this.currentMode = mode (STORY or BATTLE) している前提
+        // もし this.currentMode が未定義ならデフォルトは STORY と仮定するが、
+        // バトルモード(フリー対戦)は handleFinalBattleStart で始まる
+
+        // 簡易判定: バトル画面(BattleManager)が動いている最中だが、
+        // 呼び出し元が StoryManager 経由なら Story, EnemySelect 経由なら Battle
+        // しかし markDefeatedPokemon は battle.onEnemyDefeat から呼ばれる。
+        // Main.jsの currentMode を信頼する
+
+        const isBattleMode = this.currentMode === 'BATTLE';
+
+        if (isBattleMode) {
+            if (!this.battleDefeatedPokemonIds) this.battleDefeatedPokemonIds = new Set();
+            if (!this.battleDefeatedPokemonIds.has(key)) {
+                this.battleDefeatedPokemonIds.add(key);
+                changed = true;
+            }
+        } else {
+            if (!this.defeatedPokemonIds.has(key)) {
+                this.defeatedPokemonIds.add(key);
+                changed = true;
+            }
+        }
+
+        if (changed && !this.dom.enemySelectScreen.classList.contains('hidden')) {
             this.renderPokemonList('enemy');
         }
-        this.saveManager.saveSlot(this.currentSlotId, {
-            defeatedPokemonIds: Array.from(this.defeatedPokemonIds),
-            capturedPokemonIds: Array.from(this.capturedPokemonIds),
-            lastPlayed: Date.now()
-        });
+
+        // どちらのモードでもセーブは行う
+        this.saveStoryProgress();
     },
 
     markCapturedPokemon(id) {
         if (!id) return;
         const key = String(id);
-        if (this.capturedPokemonIds.has(key)) return;
-        this.capturedPokemonIds.add(key);
-        if (!this.dom.enemySelectScreen.classList.contains('hidden')) {
+
+        let changed = false;
+        const isBattleMode = this.currentMode === 'BATTLE';
+
+        if (isBattleMode) {
+            if (!this.battleCapturedPokemonIds) this.battleCapturedPokemonIds = new Set();
+            if (!this.battleCapturedPokemonIds.has(key)) {
+                this.battleCapturedPokemonIds.add(key);
+                changed = true;
+            }
+        } else {
+            if (!this.capturedPokemonIds.has(key)) {
+                this.capturedPokemonIds.add(key);
+                changed = true;
+            }
+        }
+
+        if (changed && !this.dom.enemySelectScreen.classList.contains('hidden')) {
             this.renderPokemonList('enemy');
         }
         const pokemon = this.loader.getPokemonDetails(key);
-        if (pokemon) {
+        if (pokemon && !isBattleMode) {
             const exists = this.storyOwnedPokemonDetails.some(pk => String(pk['図鑑No']) === key);
             if (!exists) this.storyOwnedPokemonDetails.push(pokemon);
         }
-        this.saveManager.saveSlot(this.currentSlotId, {
-            defeatedPokemonIds: Array.from(this.defeatedPokemonIds),
-            capturedPokemonIds: Array.from(this.capturedPokemonIds),
-            lastPlayed: Date.now()
-        });
+        this.saveStoryProgress();
         this.updateStoryBoxSlots();
         this.updatePokemonBoxButtonState();
     },
@@ -1548,6 +2145,10 @@ const App = {
         this.battle.onMessage = (msg, type) => this.handleBattleMessage(msg, type);
         this.battle.onPhaseChange = (phase) => this.updatePhaseUI(phase);
         this.battle.onMoveSelect = (move) => this.displaySelectedMove(move);
+        this.battle.onEnemyDefeat = (enemy) => {
+            // 敵を倒した時点で経験値獲得 (固定10EXP)
+            this.gainExp(10);
+        };
         this.battle.onBattleEnd = (res) => {
             const win = res === 'win' || res === 'catch';
             setTimeout(() => {
@@ -1568,19 +2169,19 @@ const App = {
     },
 
     // --- 描画・演出補助 ---
-    getSpriteUrl(id, back = false) {
-        return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon${back ? '/back' : ''}/${id}.png`;
-    },
+    // getSpriteUrlはUtils.getSpriteUrlを使用するため削除
 
     setBattleSprite(el, id, isBack) {
-        el.innerHTML = `<img src="${this.getSpriteUrl(id, isBack)}" class="battle-sprite-img pixel-art w-48 h-48" onerror="this.src='${this.getSpriteUrl(id)}'">`;
+        const url = Utils.getSpriteUrl(id, isBack);
+        const fallbackUrl = Utils.getSpriteUrl(id);
+        el.innerHTML = `<img src="${url}" class="battle-sprite-img pixel-art w-30 h-30" onerror="this.src='${fallbackUrl}'">`;
     },
 
     triggerAnimation(eff, target) {
         const container = target === 'player' ? this.dom.playerSpriteContainer : this.dom.enemySpriteContainer;
         const img = container.querySelector('img');
         if (!img) return;
-        img.className = 'battle-sprite-img pixel-art w-48 h-48';
+        img.className = 'battle-sprite-img pixel-art w-30 h-30';
         void img.offsetWidth; // 強制リフロー
         if (eff === 'attack') img.classList.add('anim-bounce');
         else if (eff === 'damage') img.classList.add('anim-shake');
@@ -1620,15 +2221,30 @@ const App = {
         const text = message || '...';
         this.dom.msgText.textContent = text;
         this.dom.msgText.dataset.messageType = type;
+
+        console.log('[handleBattleMessage] message:', text, 'phase:', this.battle?.phase);
+
+        // 「どうする？」メッセージの時だけコマンドメニューを表示
+        if (text.includes('どうする')) {
+            setTimeout(() => {
+                if (this.battle && this.battle.phase === 'MENU') {
+                    console.log('[handleBattleMessage] Showing command menu (どうする detected)');
+                    this.dom.cmdMenu?.classList.remove('hidden');
+                }
+            }, 100);
+        }
     },
 
     updatePhaseUI(phase) {
+        console.log('[updatePhaseUI] phase:', phase);
         this.clearNumberBuffer();
         const panels = [this.dom.cmdMenu, this.dom.moveMenu, this.dom.itemMenu, this.dom.pokemonMenu, this.dom.typingPanel];
         panels.forEach(p => p.classList.add('hidden'));
 
         if (phase === BattleManager.PHASE.MENU) {
-            this.dom.cmdMenu.classList.remove('hidden');
+            // 初期は非表示のまま（メッセージ後に表示）
+            console.log('[updatePhaseUI] MENU phase - keeping command menu hidden');
+            this.dom.cmdMenu.classList.add('hidden');
         } else if (phase === 'MOVE') {
             this.dom.moveMenu.classList.remove('hidden');
             this.renderMoveList();
@@ -1715,9 +2331,21 @@ const App = {
         const res = this.typing.checkInput(e.key);
         if (res.success) {
             this.renderTypingDisplay();
-            if (res.isComplete) this.battle.commitTurn();
+            if (res.isComplete) {
+                const elapsed = this.typing.getElapsedTime();
+                const isPerfect = this.typing.isPerfect();
+                const metrics = {
+                    speedMultiplier: elapsed <= 3000 ? 2 : 1,
+                    isPerfect: isPerfect
+                };
+                if (isPerfect) {
+                    this.battle.applyPerfectBonus();
+                }
+                this.battle.commitTurn(metrics);
+            }
         } else {
             this.triggerShake();
+            this.battle.handleMiss();
         }
     },
 
@@ -1830,7 +2458,7 @@ const App = {
             const battleVisible = this.dom.battleScreen && !this.dom.battleScreen.classList.contains('hidden');
             if (battleVisible) {
                 if (this.battle) {
-                    this.battle.setPhase(BattleManager.PHASE.MENU);
+                    this.battle.returnToMenu();
                 } else {
                     this.updatePhaseUI(BattleManager.PHASE.MENU);
                 }
@@ -1857,7 +2485,7 @@ const App = {
             // 数字キーの処理
             if (e.key === '1') this.battle.setPhase('MOVE');
             if (e.key === '4') this.battle.tryEscape();
-            
+
             // テキスト入力の処理（コマンド名の入力）
             const key = e.key.toLowerCase();
             if (/^[a-z]$/.test(key)) {
