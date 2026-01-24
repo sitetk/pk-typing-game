@@ -22,7 +22,7 @@ class AudioManager {
         this.currentBgm = null;
         this.seElements = {};
         this.isMuted = false;
-        
+
         // SEのプリロード
         this.preloadSe();
     }
@@ -99,15 +99,14 @@ class AudioManager {
 
         const audio = new Audio(path);
         audio.loop = loop;
-        audio.volume = this.isMuted ? 0 : 0.5; 
-        
+        audio.volume = this.isMuted ? 0 : 0.5;
+
+        this.currentBgm = audio;
+
         // 再生試行 (ブラウザの自動再生ポリシー対策)
-        audio.play().then(() => {
-            this.currentBgm = audio;
-        }).catch(e => {
+        audio.play().catch(e => {
             console.log('BGM playback failed (autoplay policy?):', e);
             // ユーザー操作後に再生できるようにインスタンスだけ保持しておく等の対策も可能
-            this.currentBgm = audio; 
         });
     }
 

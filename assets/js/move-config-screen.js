@@ -67,11 +67,21 @@ class MoveConfigScreen {
             // タイプに基づいた背景色クラスを決定
             const typeClass = MoveUtils.getTypeColorClass(moveData ? moveData['タイプ'] : 'ノーマル');
 
+            // ローマ字と想定ダメージを計算
+            const kanaName = this.app.typing.normalize(m['技名']);
+            const romajiOptions = this.app.typing.generateOptions(kanaName);
+            const standardRomaji = romajiOptions[0] || '';
+            const estimatedDamage = standardRomaji.length * 10;
+
             return `
             <label class="move-check-item ${isChecked ? 'checked' : ''} ${typeClass} border-l-4">
-                <div class="flex flex-col">
+                <div class="flex flex-col gap-1">
                     <span class="font-bold text-sm">${m['技名']}</span>
-                    <span class="text-xs text-slate-700">威力:${moveData ? moveData['威力'] : '?'} / ${moveData ? moveData['タイプ'] : 'ノーマル'}</span>
+                    <div class="flex justify-between items-center text-xs">
+                        <span class="font-mono text-slate-600">${standardRomaji}</span>
+                        <span class="font-bold text-slate-700">威力:~${estimatedDamage}</span>
+                    </div>
+                    <span class="text-[10px] text-slate-500">${moveData ? moveData['タイプ'] : 'ノーマル'}</span>
                 </div>
                 <input type="checkbox" value="${i}" ${isChecked ? 'checked' : ''}>
             </label>
@@ -144,5 +154,15 @@ class MoveConfigScreen {
         };
 
         return typeColors[type] || 'border-gray-400 bg-gray-50';
+    }
+
+    setBattleStartButtonVisible(visible) {
+        const btn = document.getElementById('battle-start-final-btn');
+        if (!btn) return;
+        if (visible) {
+            btn.classList.remove('hidden');
+        } else {
+            btn.classList.add('hidden');
+        }
     }
 }

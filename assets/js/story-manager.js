@@ -79,6 +79,7 @@ class StoryManager {
         this.attachStoryRegionCardHandlers();
         this.app.storyCollectionInitialized = false;
         if (logHistory) this.app.recordScreen('story-region-select');
+        this.app.audio.playBgm('title');
     }
 
     // resetStoryCapturedCollections() is in main.js dealing with save data, keep it there or access via app
@@ -109,6 +110,7 @@ class StoryManager {
         this.app.updateStoryBoxSlots();
         this.app.updatePokemonBoxButtonState();
         this.app.updateGetStageButtonState();
+        this.app.audio.playBgm('title');
     }
 
     handleStoryStageSelect(stageId, { openModal = true } = {}) {

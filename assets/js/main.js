@@ -226,7 +226,16 @@ const App = {
             trainerBattleMessage: document.getElementById('trainer-battle-message'),
             trainerPokemonList: document.getElementById('trainer-pokemon-list'),
             trainerBattleStartBtn: document.getElementById('trainer-battle-start-btn'),
-            trainerBattleCancelBtn: document.getElementById('trainer-battle-cancel-btn')
+            trainerBattleCancelBtn: document.getElementById('trainer-battle-cancel-btn'),
+
+            // システムモーダル
+            systemMessageModal: document.getElementById('system-message-modal'),
+            systemModalTitle: document.getElementById('system-modal-title'),
+            systemModalMessage: document.getElementById('system-modal-message'),
+            systemModalInputContainer: document.getElementById('system-modal-input-container'),
+            systemModalInput: document.getElementById('system-modal-input'),
+            systemModalOkBtn: document.getElementById('system-modal-ok-btn'),
+            systemModalCancelBtn: document.getElementById('system-modal-cancel-btn')
         };
     },
 
@@ -277,6 +286,18 @@ const App = {
         }
         document.getElementById('modal-confirm-btn').onclick = () => this.handleLevelConfirm();
         document.getElementById('modal-cancel-btn').onclick = () => this.dom.levelModal.classList.add('hidden');
+
+        const moveConfigBackBtn = document.getElementById('move-config-back-btn');
+        if (moveConfigBackBtn) {
+            moveConfigBackBtn.onclick = () => {
+                if (this.storyMoveConfigContext) {
+                    this.closeStoryMoveConfig();
+                } else {
+                    this.showEnemySelectScreen(false, false);
+                }
+            };
+        }
+
         document.getElementById('battle-start-final-btn').onclick = () => this.handleFinalBattleStart();
 
         // ページネーション
@@ -347,6 +368,121 @@ const App = {
             this.dom.storyPokemonBoxOverlay.addEventListener('click', (e) => {
                 if (e.target === this.dom.storyPokemonBoxOverlay) this.closePokemonBoxOverlay();
             });
+        }
+
+        // Pokemon Action Modal
+        const pokemonActionMoveConfig = document.getElementById('pokemon-action-move-config');
+        const pokemonActionRename = document.getElementById('pokemon-action-rename');
+        const pokemonActionRelease = document.getElementById('pokemon-action-release');
+        const pokemonActionCancel = document.getElementById('pokemon-action-cancel');
+        const pokemonActionModal = document.getElementById('pokemon-action-modal');
+
+        if (pokemonActionMoveConfig) pokemonActionMoveConfig.onclick = () => this.handlePokemonActionMoveConfig();
+        if (pokemonActionRename) pokemonActionRename.onclick = () => this.handlePokemonActionRename();
+        if (pokemonActionRelease) pokemonActionRelease.onclick = () => this.handlePokemonActionRelease();
+        if (pokemonActionCancel) pokemonActionCancel.onclick = () => this.closePokemonActionModal();
+        if (pokemonActionModal) {
+            pokemonActionModal.addEventListener('click', (e) => {
+                if (e.target === pokemonActionModal) this.closePokemonActionModal();
+            });
+        }
+
+        // System Modal
+        if (this.dom.systemModalOkBtn) {
+            this.dom.systemModalOkBtn.onclick = () => this.handleSystemModalResolve(true);
+            if (this.dom.systemModalCancelBtn) {
+                this.dom.systemModalCancelBtn.onclick = () => this.handleSystemModalResolve(false);
+            }
+
+            // Global Enter key for System Modal
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && this.dom.systemMessageModal && !this.dom.systemMessageModal.classList.contains('hidden')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.handleSystemModalResolve(true);
+                }
+            });
+        }
+    },
+
+    systemModalResolver: null,
+
+    showSystemMessage(message, title = 'お知らせ') {
+        return new Promise(resolve => {
+            if (!this.dom.systemMessageModal) {
+                alert(message);
+                resolve();
+                return;
+            }
+            this.dom.systemModalTitle.textContent = title;
+            this.dom.systemModalMessage.textContent = message;
+            this.dom.systemModalInputContainer.classList.add('hidden');
+            this.dom.systemModalCancelBtn.classList.add('hidden');
+            this.dom.systemModalOkBtn.textContent = 'Enter';
+            this.dom.systemMessageModal.classList.remove('hidden');
+
+            this.systemModalResolver = (result) => {
+                this.closeSystemModal();
+                resolve();
+            };
+        });
+    },
+
+    showSystemConfirm(message, title = '確認') {
+        return new Promise(resolve => {
+            if (!this.dom.systemMessageModal) {
+                resolve(confirm(message));
+                return;
+            }
+            this.dom.systemModalTitle.textContent = title;
+            this.dom.systemModalMessage.textContent = message;
+            this.dom.systemModalInputContainer.classList.add('hidden');
+            this.dom.systemModalCancelBtn.classList.remove('hidden');
+            this.dom.systemModalOkBtn.textContent = 'Enter';
+            this.dom.systemMessageModal.classList.remove('hidden');
+
+            this.systemModalResolver = (result) => {
+                this.closeSystemModal();
+                resolve(result);
+            };
+        });
+    },
+
+    showSystemPrompt(message, defaultValue = '', title = '入力') {
+        return new Promise(resolve => {
+            if (!this.dom.systemMessageModal) {
+                resolve(prompt(message, defaultValue));
+                return;
+            }
+            this.dom.systemModalTitle.textContent = title;
+            this.dom.systemModalMessage.textContent = message;
+            this.dom.systemModalInputContainer.classList.remove('hidden');
+            if (this.dom.systemModalInput) {
+                this.dom.systemModalInput.value = defaultValue;
+                setTimeout(() => this.dom.systemModalInput.focus(), 50);
+            }
+            this.dom.systemModalCancelBtn.classList.remove('hidden');
+            this.dom.systemModalOkBtn.textContent = 'Enter';
+            this.dom.systemMessageModal.classList.remove('hidden');
+
+            this.systemModalResolver = (result) => {
+                const value = result ? (this.dom.systemModalInput ? this.dom.systemModalInput.value : '') : null;
+                this.closeSystemModal();
+                resolve(value);
+            };
+        });
+    },
+
+    closeSystemModal() {
+        if (this.dom.systemMessageModal) {
+            this.dom.systemMessageModal.classList.add('hidden');
+        }
+        this.systemModalResolver = null;
+    },
+
+    handleSystemModalResolve(result) {
+        if (this.systemModalResolver) {
+            this.systemModalResolver(result);
         }
     },
 
@@ -594,9 +730,11 @@ const App = {
 
 
 
-    handleSlotDelete(slotId) {
+    async handleSlotDelete(slotId) {
         if (!slotId) return;
-        if (!confirm('このスロットのデータを ほんとうに けしても いいですか？')) return;
+        const confirmed = await this.showSystemConfirm('このスロットのデータを ほんとうに けしても いいですか？', '警告');
+        if (!confirmed) return;
+
         this.saveManager.deleteSlot(slotId);
         if (this.currentSlotId === slotId) {
             this.currentSlotId = '1';
@@ -607,6 +745,10 @@ const App = {
             this.storyItems.clear();
             this.clearedStages.clear();
             this.resetStoryCapturedCollections();
+            this.storyOwnedPokemonDetails = [];
+
+            // リセット後の状態を反映
+            this.setActiveSlotFromData({ playerName: 'プレイヤー', playTime: 0 });
         }
         this.renderSaveSlots(this.saveManager.loadAll());
     },
@@ -683,7 +825,7 @@ const App = {
             });
             this.saveManager.saveToFile(this.currentSlotId);
         } catch (err) {
-            alert(err.message || 'ファイルへのセーブに しっぱいしました。');
+            this.showSystemMessage(err.message || 'ファイルへのセーブに しっぱいしました。', 'エラー');
             console.error(err);
         }
     },
@@ -703,7 +845,7 @@ const App = {
                 this.showImportTargetModal();
             })
             .catch(err => {
-                alert(err.message || 'ファイルの 読みこみに しっぱいしました。');
+                this.showSystemMessage(err.message || 'ファイルの 読みこみに しっぱいしました。', 'エラー');
                 console.error(err);
             });
     },
@@ -962,6 +1104,14 @@ const App = {
             uuid: uuid,
             nickname: nickname || ''
         });
+
+        // パーティに空きがあれば自動セット
+        const emptySlotIndex = this.storyPartySlots.findIndex(slot => slot === null);
+        if (emptySlotIndex !== -1) {
+            this.storyPartySlots[emptySlotIndex] = uuid;
+        }
+
+        this.updateStoryBoxSlots();
     },
 
 
@@ -1219,7 +1369,7 @@ const App = {
 
     handleTrainerBattleEnd(result, stageId, trainerData) {
         const win = result === 'win';
-        setTimeout(() => {
+        setTimeout(async () => {
             if (win) {
                 this.clearedStages.add(stageId);
 
@@ -1232,12 +1382,8 @@ const App = {
                 this.gainExp(earnedExp);
 
                 this.saveStoryProgress();
-                alert(`${trainerData.name} との バトルに かった！`);
-
-                this.storyManager.refreshStoryStageScreen();
-            } else {
-                alert('まけちゃった... つぎは がんばろう！');
-            }
+                await this.showSystemMessage(`${trainerData.name} との バトルに かった！`, 'しょうり！');
+            } else { await this.showSystemMessage('まけちゃった... つぎは がんばろう！', 'ざんねん'); }
             this.storyManager.refreshStoryStageScreen();
         }, 1500);
     },
@@ -1303,7 +1449,7 @@ const App = {
         if (this.currentParty.length === 0) return;
         // HPチェック: 全員瀕死なら続行不可
         if (this.currentParty.every(p => (p.currentHp !== undefined ? p.currentHp : 999) <= 0)) {
-            alert('たたかえる ポケモンが いません！');
+            this.showSystemMessage('たたかえる ポケモンが いません！', 'エラー');
             this.wildChainCount = 0;
             this.storyManager.refreshStoryStageScreen();
             return;
@@ -1372,7 +1518,7 @@ const App = {
 
     handleWildBattleEnd(result, stageId, enemyLevel) {
         const win = result === 'win' || result === 'catch';
-        setTimeout(() => {
+        setTimeout(async () => {
             if (win) {
                 // 初クリア時のみクリア扱いにするなら条件分岐、野生は何度でもクリア扱い更新でOK
                 this.clearedStages.add(stageId);
@@ -1385,14 +1531,16 @@ const App = {
                     const enemy = this.battle.enemyParty[0]; // 野生は1体
                     if (enemy) {
                         let nickname = '';
-                        if (confirm('ニックネームを つけますか？')) {
-                            nickname = prompt('ニックネームを いれてください', enemy['名前（日本語）']) || '';
+                        const confirmed = await this.showSystemConfirm('ニックネームを つけますか？', '捕獲成功！');
+                        if (confirmed) {
+                            const inputName = await this.showSystemPrompt('ニックネームを いれてください', enemy['名前（日本語）']);
+                            nickname = inputName || '';
                         }
                         this.addPokemonToStory(String(enemy['図鑑No']), enemy, enemyLevel, nickname);
                     }
-                    alert('ポケモンを つかまえた！ やったね！');
+                    await this.showSystemMessage('ポケモンを つかまえた！ やったね！', '捕獲成功！');
                 } else {
-                    alert('やせいの ポケモンに かった！');
+                    await this.showSystemMessage('やせいの ポケモンに かった！', 'しょうり！');
                 }
 
                 this.gainExp(earnedExp);
@@ -1424,11 +1572,96 @@ const App = {
 
                 this.storyManager.refreshStoryStageScreen();
             } else {
-                alert('まけちゃった... つぎは がんばろう！');
+                await this.showSystemMessage('まけちゃった... つぎは がんばろう！', 'ざんねん');
                 this.wildChainCount = 0; // Stop chain on loss
                 this.storyManager.refreshStoryStageScreen();
             }
         }, 1500);
+    },
+
+    swapStoryPokemonSlots(source, target) {
+        if (source.type === target.type && source.index === target.index) return;
+
+        const getUuid = (t, i) => {
+            if (t === 'party') return this.storyPartySlots[i];
+            if (t === 'box') {
+                const slot = this.storyBoxSlots[i];
+                return slot ? slot.uuid : null;
+            }
+            return null;
+        };
+
+        const sourceUuid = getUuid(source.type, source.index);
+        const targetUuid = getUuid(target.type, target.index);
+
+        // 両方空なら何もしない
+        if (!sourceUuid && !targetUuid) return;
+
+        // 1. Party同士
+        if (source.type === 'party' && target.type === 'party') {
+            this.storyPartySlots[source.index] = targetUuid;
+            this.storyPartySlots[target.index] = sourceUuid;
+        }
+        // 2. Box同士 (順序入れ替え)
+        else if (source.type === 'box' && target.type === 'box') {
+            if (sourceUuid && targetUuid) {
+                const idx1 = this.storyOwnedPokemonDetails.findIndex(p => p.uuid === sourceUuid);
+                const idx2 = this.storyOwnedPokemonDetails.findIndex(p => p.uuid === targetUuid);
+                if (idx1 !== -1 && idx2 !== -1) {
+                    const temp = this.storyOwnedPokemonDetails[idx1];
+                    this.storyOwnedPokemonDetails[idx1] = this.storyOwnedPokemonDetails[idx2];
+                    this.storyOwnedPokemonDetails[idx2] = temp;
+                }
+            } else if (sourceUuid && !targetUuid) {
+                // 空きスロットへ移動 = 末尾へ移動
+                const idx1 = this.storyOwnedPokemonDetails.findIndex(p => p.uuid === sourceUuid);
+                if (idx1 !== -1) {
+                    const item = this.storyOwnedPokemonDetails.splice(idx1, 1)[0];
+                    this.storyOwnedPokemonDetails.push(item);
+                }
+            }
+        }
+        // 3. Party <-> Box
+        else {
+            const partySide = source.type === 'party' ? source : target;
+            const boxSide = source.type === 'party' ? target : source;
+            const pUuid = getUuid('party', partySide.index);
+            const bUuid = getUuid('box', boxSide.index);
+
+            // Partyスロットを更新 (Box側のポケモン、または空ならnull)
+            this.storyPartySlots[partySide.index] = bUuid;
+
+            // Box側のポケモンとParty側のポキモンをリスト上で入れ替えておく
+            // これにより、Boxリスト再生成時に「入れ替わった位置」に古いPartyポケモンが来るようになる
+            if (pUuid && bUuid) {
+                const idx1 = this.storyOwnedPokemonDetails.findIndex(p => p.uuid === pUuid);
+                const idx2 = this.storyOwnedPokemonDetails.findIndex(p => p.uuid === bUuid);
+                if (idx1 !== -1 && idx2 !== -1) {
+                    const temp = this.storyOwnedPokemonDetails[idx1];
+                    this.storyOwnedPokemonDetails[idx1] = this.storyOwnedPokemonDetails[idx2];
+                    this.storyOwnedPokemonDetails[idx2] = temp;
+                }
+            } else if (pUuid && !bUuid) {
+                // PartyからBoxの空きへ: リストの末尾ではなく、現在位置でBOX入り(リスト順序維持)
+                // 何もしなくてよい（自動的にBoxリストの並び順で表示される）
+                // もし「ドラッグした空きスロットの位置」に入れたいなら並び替えが必要だが、
+                // リスト構造上「空きスロット」は実体がないため「末尾」扱いが妥当。
+                // ここでは「移動した」感を出すため、配列の最後に移動してみる
+                const idx1 = this.storyOwnedPokemonDetails.findIndex(p => p.uuid === pUuid);
+                if (idx1 !== -1) {
+                    const item = this.storyOwnedPokemonDetails.splice(idx1, 1)[0];
+                    this.storyOwnedPokemonDetails.push(item);
+                }
+            }
+        }
+
+        this.saveStoryProgress();
+        this.updateStoryBoxSlots();
+
+        requestAnimationFrame(() => {
+            this.renderStoryPokemonParty();
+            this.renderStoryPokemonBox();
+        });
     },
 
     updateStoryBoxSlots(forcePartyReset = false) {
@@ -1470,20 +1703,10 @@ const App = {
             return this.storyOwnedPokemonDetails.some(pk => pk.uuid === uuid) ? uuid : null;
         });
 
-        // 穴埋めはしない（手持ちが空でもボックスから勝手に移動させない方が一般的だが、
-        // もし「手持ちが減ったら補充」という仕様ならここでやる。
-        // 元のコードは補充していたので、補充ロジックを入れる）
+        // 自動充填ロジックを無効化 (Drag and Dropによる自由な編成を優先)
+        /*
         let emptySlotCount = this.storyPartySlots.filter(s => !s).length;
         if (emptySlotCount > 0 && boxCandidates.length > 0) {
-            // ボックスから補充するよりは、単にnullのままにするか？
-            // ユーザーリクエスト「手持ちに入れたポケモンはボックスに表示させない」
-            // Box -> Party移動機能がないと詰むので、ここでは自動補充を入れておく
-            // ただし boxCandidates はすでに除外済みなので、再計算が必要
-            // いや、boxCandidatesにあるやつはパーティにいないやつだから、そこから補充すればいい
-            // しかし this.storyBoxSlots はすでにセットした。
-            // 複雑になるので、「パーティから消えたらnullのまま」とし、
-            // ボックス画面で入れ替え機能を実装するのが筋だが、
-            // 入れ替え機能実装までは自動補充で凌ぐ
             const availableForFill = allOwned.filter(pk => !this.storyPartySlots.includes(pk.uuid));
 
             this.storyPartySlots = this.storyPartySlots.map(uuid => {
@@ -1492,13 +1715,13 @@ const App = {
                 return fill ? fill.uuid : null;
             });
 
-            // 再度ボックスリスト更新
             const finalBoxCandidates = allOwned.filter(pk => !this.storyPartySlots.includes(pk.uuid));
             this.storyBoxSlots = finalBoxCandidates.slice(0, this.STORY_BOX_CAPACITY);
             while (this.storyBoxSlots.length < this.STORY_BOX_CAPACITY) {
                 this.storyBoxSlots.push(null);
             }
         }
+        */
 
         if (this.storyBoxViewActive) {
             this.renderStoryPokemonBox();
@@ -1531,8 +1754,8 @@ const App = {
         }
     },
 
-    openPokemonBoxOverlay() {
-        if (this.dom.pokemonBoxBtn?.disabled) return;
+    openPokemonBoxOverlay(force = false) {
+        if (!force && this.dom.pokemonBoxBtn?.disabled) return;
         this.updateStoryBoxSlots();
         this.storyPokemonBoxSelection = null;
         this.renderStoryPokemonParty();
@@ -1595,6 +1818,34 @@ const App = {
         }
     },
 
+    /* --- Drag and Drop Handlers --- */
+    handleDragStart(e, type, index) {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', JSON.stringify({ type, index }));
+        // ドラッグ中の見た目調整（必要なら）
+    },
+
+    handleDragOver(e) {
+        if (e.preventDefault) e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        return false;
+    },
+
+    handleDrop(e, targetType, targetIndex) {
+        if (e.stopPropagation) e.stopPropagation();
+        e.preventDefault();
+
+        try {
+            const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+            if (data && (data.type === 'party' || data.type === 'box')) {
+                this.swapStoryPokemonSlots(data, { type: targetType, index: targetIndex });
+            }
+        } catch (err) {
+            console.error('Drop error:', err);
+        }
+        return false;
+    },
+
     renderStoryPokemonParty() {
         if (!this.dom.storyPokemonParty) return;
         const html = this.storyPartySlots.map((uuid, index) => {
@@ -1610,6 +1861,7 @@ const App = {
                     data-index="${index}"
                     data-uuid="${uuid || ''}"
                     aria-label="${displayName}"
+                    draggable="true"
                 >
                     ${pokemon ? `<img src="${Utils.getSpriteUrl(pokemon['図鑑No'])}" alt="${displayName}" class="pixel-art">` : ''}
                     <div class="flex flex-col items-start leading-tight">
@@ -1621,7 +1873,13 @@ const App = {
         }).join('');
         this.dom.storyPokemonParty.innerHTML = html;
         this.dom.storyPokemonParty.querySelectorAll('button').forEach(button => {
-            button.onclick = () => this.handleStoryPokemonSlotClick('party', Number(button.dataset.index));
+            const index = Number(button.dataset.index);
+            button.onclick = () => this.handleStoryPokemonSlotClick('party', index);
+
+            // Drag and Drop
+            button.addEventListener('dragstart', (e) => this.handleDragStart(e, 'party', index));
+            button.addEventListener('dragover', (e) => this.handleDragOver(e));
+            button.addEventListener('drop', (e) => this.handleDrop(e, 'party', index));
         });
     },
 
@@ -1641,6 +1899,7 @@ const App = {
                         data-index="${index}"
                         data-uuid="${hasPokemon ? slot.uuid : ''}"
                         aria-label="${hasPokemon ? displayName : '空きスロット'}"
+                        draggable="true"
                     >
                         ${hasPokemon ? `<img src="${slot.sprite}" alt="${displayName}" class="pixel-art">` : ''}
                         <div class="story-pokemon-box-info flex flex-col items-center">
@@ -1649,13 +1908,6 @@ const App = {
                         </div>
                         ${!hasPokemon ? '<span class="story-pokemon-box-slot-empty-label">empty</span>' : ''}
                     </button>
-                    ${hasPokemon ? `
-                    <button type="button" class="absolute top-0 right-0 p-1 bg-white/90 rounded-full shadow hover:bg-white transition-colors z-10"
-                        onclick="window.app.promptRename('${slot.uuid}')"
-                        title="名前を変える">
-                        <svg class="w-3 h-3 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
-                    </button>
-                    ` : ''}
                 </div>
             `;
         }).join('');
@@ -1663,13 +1915,20 @@ const App = {
 
         // メインのボタンイベント設定
         this.dom.storyPokemonBoxGrid.querySelectorAll('button.story-pokemon-box-slot').forEach(button => {
-            button.onclick = () => this.handleStoryPokemonSlotClick('box', Number(button.dataset.index));
+            const index = Number(button.dataset.index);
+            button.onclick = () => this.handleStoryPokemonSlotClick('box', index);
+
+            // Drag and Drop
+            button.addEventListener('dragstart', (e) => this.handleDragStart(e, 'box', index));
+            button.addEventListener('dragover', (e) => this.handleDragOver(e));
+            button.addEventListener('drop', (e) => this.handleDrop(e, 'box', index));
         });
 
         // global scope hack for inline onclick (safe enough for this scale)
         if (!window.app) window.app = this;
     },
 
+    /* --- promptRename (skipped) --- */
     promptRename(uuid) {
         if (!uuid) return;
         const pokemon = this.storyOwnedPokemonDetails.find(pk => pk.uuid === uuid);
@@ -1684,25 +1943,165 @@ const App = {
         }
     },
 
+    promptRelease(uuid) {
+        if (!uuid) return;
+        const pokemon = this.storyOwnedPokemonDetails.find(pk => pk.uuid === uuid);
+        if (!pokemon) return;
+
+        if (confirm(`${pokemon.nickname || pokemon['名前（日本語）']} を ほんとうに にがしますか？\n（にがした ポケモンは もどりません！）`)) {
+            // リストから削除
+            this.storyOwnedPokemonDetails = this.storyOwnedPokemonDetails.filter(pk => pk.uuid !== uuid);
+
+            // Partyにいた場合も消える(updateStoryBoxSlotsで処理されるが念のためPartyスロットもnull化)
+            const partyIndex = this.storyPartySlots.indexOf(uuid);
+            if (partyIndex !== -1) {
+                this.storyPartySlots[partyIndex] = null;
+            }
+
+            this.saveStoryProgress();
+            this.updateStoryBoxSlots();
+            this.renderStoryPokemonParty();
+            this.renderStoryPokemonBox();
+            alert(`${pokemon.nickname || pokemon['名前（日本語）']} は 野生に かえっていきました... バイバイ！`);
+        }
+    },
+
+    openStoryPokemonMoveConfig(uuid) {
+        if (!uuid) return;
+        const pokemon = this.storyOwnedPokemonDetails.find(pk => pk.uuid === uuid);
+        if (!pokemon) return;
+
+        const baseData = this.loader.getPokemonDetails(pokemon['図鑑No']);
+        if (!baseData || !baseData.moves) {
+            alert('この ポケモンの わざデータが みつかりません。');
+            return;
+        }
+
+        const tempPokemon = {
+            ...baseData,
+            level: pokemon['獲得レベル'] || 5,
+            // 既存の技がなければ初期化
+            selectedMoves: pokemon.selectedMoves || [],
+            uuid: pokemon.uuid
+        };
+
+        if (!tempPokemon.selectedMoves || tempPokemon.selectedMoves.length === 0) {
+            const availableMoves = baseData.moves.filter(m => {
+                const route = m['経路'] || '';
+                const reqLevel = m['習得レベル'] || 1;
+                return (route.includes('レベルアップ') || route.includes('初期')) && reqLevel <= tempPokemon.level;
+            }).filter(m => m['分類'] !== 'へんか');
+
+            tempPokemon.selectedMoves = availableMoves.slice(-4);
+        }
+
+        this.storyMoveConfigContext = {
+            pokemon: pokemon,
+            previousScreen: this.storyBoxViewActive ? 'story-box' : 'story-stage'
+        };
+
+        // UIが重なるのでボックスを閉じる
+        if (this.storyBoxViewActive) {
+            this.closePokemonBoxOverlay();
+        }
+
+        this.currentParty = [tempPokemon];
+        this.battleSettings = this.battleSettings || {};
+        this.battleSettings.playerLevel = tempPokemon.level;
+
+        if (this.moveConfig) {
+            this.moveConfig.setBattleStartButtonVisible(false);
+            this.moveConfig.show();
+        }
+    },
+
+    closeStoryMoveConfig() {
+        if (!this.storyMoveConfigContext) return;
+
+        const tempPokemon = this.currentParty[0];
+        const originalPokemon = this.storyMoveConfigContext.pokemon;
+        const previousScreen = this.storyMoveConfigContext.previousScreen;
+
+        if (tempPokemon && originalPokemon) {
+            originalPokemon.selectedMoves = tempPokemon.selectedMoves;
+            this.saveStoryProgress();
+        }
+
+        this.storyMoveConfigContext = null;
+        this.storyManager.refreshStoryStageScreen();
+
+        if (previousScreen === 'story-box') {
+            this.openPokemonBoxOverlay(true);
+        }
+    },
+
+    openPokemonActionModal(uuid) {
+        if (!uuid) return;
+        const pokemon = this.storyOwnedPokemonDetails.find(pk => pk.uuid === uuid);
+        if (!pokemon) return;
+
+        this.currentPokemonActionUuid = uuid;
+        const modal = document.getElementById('pokemon-action-modal');
+        const title = document.getElementById('pokemon-action-title');
+
+        if (modal && title) {
+            title.textContent = pokemon.nickname || pokemon['名前（日本語）'];
+            modal.classList.remove('hidden');
+        }
+    },
+
+    closePokemonActionModal() {
+        const modal = document.getElementById('pokemon-action-modal');
+        if (modal) {
+            modal.classList.add('hidden');
+        }
+        this.currentPokemonActionUuid = null;
+    },
+
+    handlePokemonActionMoveConfig() {
+        const uuid = this.currentPokemonActionUuid;
+        if (!uuid) return;
+        this.closePokemonActionModal();
+        this.openStoryPokemonMoveConfig(uuid);
+    },
+
+    handlePokemonActionRename() {
+        const uuid = this.currentPokemonActionUuid;
+        if (!uuid) return;
+        this.closePokemonActionModal();
+        this.promptRename(uuid);
+    },
+
+    handlePokemonActionRelease() {
+        const uuid = this.currentPokemonActionUuid;
+        if (!uuid) return;
+        this.closePokemonActionModal();
+        this.promptRelease(uuid);
+    },
+
+    closeStoryMoveConfig() {
+        if (!this.storyMoveConfigContext) return;
+        const tempPokemon = this.currentParty[0];
+        const originalPokemon = this.storyMoveConfigContext.pokemon;
+        if (tempPokemon && originalPokemon) {
+            originalPokemon.selectedMoves = tempPokemon.selectedMoves;
+            this.saveStoryProgress();
+        }
+        this.storyMoveConfigContext = null;
+        this.storyManager.refreshStoryStageScreen();
+    },
+
     handleStoryPokemonSlotClick(type, index) {
         if (type !== 'party' && type !== 'box') return;
-        const previous = this.storyPokemonBoxSelection;
-        if (previous && previous.type === type && previous.index === index) {
-            this.storyPokemonBoxSelection = null;
-            this.renderStoryPokemonParty();
-            this.renderStoryPokemonBox();
-            return;
+        const getUuid = (type, index) => {
+            if (type === 'party') return this.storyPartySlots[index];
+            if (type === 'box') return this.storyBoxSlots[index]?.uuid;
+            return null;
+        };
+        const uuid = getUuid(type, index);
+        if (uuid) {
+            this.openPokemonActionModal(uuid);
         }
-        if (!previous || previous.type === type) {
-            this.storyPokemonBoxSelection = { type, index };
-            this.renderStoryPokemonParty();
-            this.renderStoryPokemonBox();
-            return;
-        }
-        this.swapStoryPokemonSlots(previous, { type, index });
-        this.storyPokemonBoxSelection = null;
-        this.renderStoryPokemonParty(); // 反映
-        this.renderStoryPokemonBox();  // 反映
     },
 
     swapStoryPokemonSlots(a, b) {
@@ -1722,18 +2121,33 @@ const App = {
         if (!uuidA && !uuidB) return;
 
         // 交換処理
-        // Party同士: 単なる入れ替え
-        // Box同士: updateStoryBoxSlotsで再計算されるので意味がない？いや、並び順保存してない。
-        // -> Boxはソート順(入手順?)固定なら入れ替え不能。
-        // -> ユーザー要望は「手持ちに入れたのをボックスに出さない」。
-        // -> 今回は Party <-> Box の移動が主眼。
-
         if (a.type === 'party' && b.type === 'party') {
             [this.storyPartySlots[a.index], this.storyPartySlots[b.index]] = [this.storyPartySlots[b.index], this.storyPartySlots[a.index]];
         } else if (a.type === 'box' && b.type === 'box') {
-            // Box内の並び替えは未実装（ソート順固定のため）
-            alert('ボックス内の 並び替えは できません');
-            return;
+            // Box同士の入れ替え
+            if (!uuidA || !uuidB) {
+                // 片方が空の場合は、空きスロットへの移動となるが、
+                // 「左上詰め」ルールがあるため、任意の空き場所への移動は無効化（自動整列されるため）
+                // ただし、もし「最後尾への移動」として扱いたい場合はここにロジックを書くが、
+                // 今回は「入れ替え」のみ実装する
+                // alert('空きスロットへの移動はできません（自動整列されます）');
+                return;
+            }
+
+            // storyOwnedPokemonDetails 内でのインデックスを探して入れ替える
+            const indexA = this.storyOwnedPokemonDetails.findIndex(pk => pk.uuid === uuidA);
+            const indexB = this.storyOwnedPokemonDetails.findIndex(pk => pk.uuid === uuidB);
+
+            if (indexA !== -1 && indexB !== -1) {
+                // 配列内での順序を入れ替える
+                const temp = this.storyOwnedPokemonDetails[indexA];
+                this.storyOwnedPokemonDetails[indexA] = this.storyOwnedPokemonDetails[indexB];
+                this.storyOwnedPokemonDetails[indexB] = temp;
+
+                // ボックスを再描画（updateStoryBoxSlotsで順序が反映される）
+                this.updateStoryBoxSlots();
+            }
+
         } else {
             // Party <-> Box
             // Partyスロットを書き換えるだけで、Box側は自動的に「Partyから外れたら出現」「Partyに入ったら消失」する
@@ -2043,11 +2457,11 @@ const App = {
         if (changed && !this.dom.enemySelectScreen.classList.contains('hidden')) {
             this.renderPokemonList('enemy');
         }
-        const pokemon = this.loader.getPokemonDetails(key);
-        if (pokemon && !isBattleMode) {
-            const exists = this.storyOwnedPokemonDetails.some(pk => String(pk['図鑑No']) === key);
-            if (!exists) this.storyOwnedPokemonDetails.push(pokemon);
-        }
+
+        // 修正: ここで storyOwnedPokemonDetails に追加すると、
+        // 捕獲イベント(handleWildBattleEnd等)での追加と重複してしまうため削除。
+        // 図鑑フラグ(capturedPokemonIds)の更新のみを行う。
+
         this.saveStoryProgress();
         this.updateStoryBoxSlots();
         this.updatePokemonBoxButtonState();
@@ -2079,7 +2493,10 @@ const App = {
         this.battleSettings.playerLevel = playerLevel;
         this.battleSettings.enemyLevel = enemyLevel;
         this.dom.levelModal.classList.add('hidden');
-        if (this.moveConfig) this.moveConfig.show();
+        if (this.moveConfig) {
+            this.moveConfig.setBattleStartButtonVisible(true);
+            this.moveConfig.show();
+        }
     },
 
     keepDigitsOnly(target) {
@@ -2113,9 +2530,10 @@ const App = {
         this.dom.keyboard.classList.remove('translate-y-full'); // キーボードを表示
         if (this.dom.keyboardColumn) this.dom.keyboardColumn.classList.remove('hidden');
 
-        // BGM決定
+        // BGM決定 (既存のコメントアウトされていたロジックを有効化)
         const bgms = ['battle_wild', 'battle_trainer', 'battle_rival'];
-        this.audio.playBgm(bgms[Math.floor(Math.random() * bgms.length)]);
+        const selectedBgm = bgms[Math.floor(Math.random() * bgms.length)];
+        this.audio.playBgm(selectedBgm);
 
         // バトルマネージャー初期化
         this.battle = new BattleManager(
@@ -2148,17 +2566,23 @@ const App = {
         this.battle.onEnemyDefeat = (enemy) => {
             // 敵を倒した時点で経験値獲得 (固定10EXP)
             this.gainExp(10);
+            const id = enemy && enemy['図鑑No'];
+            if (id) this.markDefeatedPokemon(id);
         };
         this.battle.onBattleEnd = (res) => {
             const win = res === 'win' || res === 'catch';
+
+            if (win) {
+                this.audio.playBgm('victory_wild', false);
+            }
+
             setTimeout(() => {
                 alert(win ? "きみの かちだ！ おめでとう！" : "まけちゃった... つぎは がんばろう！");
+
+                // バトル終了後はマップ(タイトル)BGMに戻す
+                this.audio.playBgm('title');
                 this.showEnemySelectScreen(false, false);
             }, 1500);
-        };
-        this.battle.onEnemyDefeat = (enemy) => {
-            const id = enemy && enemy['図鑑No'];
-            if (id) this.markDefeatedPokemon(id);
         };
         this.battle.onEnemyCapture = (enemy) => {
             const id = enemy && enemy['図鑑No'];
@@ -2308,6 +2732,13 @@ const App = {
         this.dom.moveList.innerHTML = moves.map((m, i) => {
             const numberLabel = String(i + 1).padStart(2, '0');
             const typeClass = MoveUtils.getTypeColorClass(m['タイプ']);
+
+            // ローマ字と想定ダメージを計算
+            const kanaName = this.typing.normalize(m['技名']);
+            const romajiOptions = this.typing.generateOptions(kanaName);
+            const standardRomaji = romajiOptions[0] || '';
+            const estimatedDamage = standardRomaji.length * 10;
+
             return `
                 <div class="move-card ${typeClass}" onclick="App.battle.selectMove(${i})" data-move-number="${numberLabel}">
                     <div class="flex justify-between items-start">
@@ -2317,9 +2748,9 @@ const App = {
                         </div>
                         <span class="text-[10px] move-meta">${m['タイプ']}</span>
                     </div>
-                    <div class="flex justify-between text-[10px] text-slate-500 mt-2">
-                        <span>PP:${m['PP']}</span>
-                        <span>威力:${m['威力']}</span>
+                    <div class="flex justify-between items-center text-sm text-slate-700 mt-2 pt-2 border-t border-slate-200">
+                        <span class="font-mono">${standardRomaji}</span>
+                        <span class="font-bold">威力:~${estimatedDamage}</span>
                     </div>
                 </div>
             `;
@@ -2334,9 +2765,11 @@ const App = {
             if (res.isComplete) {
                 const elapsed = this.typing.getElapsedTime();
                 const isPerfect = this.typing.isPerfect();
+                const typedLength = this.typing.typedRoman.length; // 実際に入力した文字数
                 const metrics = {
                     speedMultiplier: elapsed <= 3000 ? 2 : 1,
-                    isPerfect: isPerfect
+                    isPerfect: isPerfect,
+                    typedLength: typedLength
                 };
                 if (isPerfect) {
                     this.battle.applyPerfectBonus();
@@ -2608,7 +3041,12 @@ const App = {
     },
 
     showModeSelectScreen() { this.hideAllScreens(); this.dom.titleScreen.classList.remove('hidden'); document.getElementById('mode-select').classList.remove('hidden'); },
-    showTitleScreen() { this.hideAllScreens(); this.dom.titleScreen.classList.remove('hidden'); document.getElementById('start-panel').classList.remove('hidden'); }
+    showTitleScreen() {
+        this.hideAllScreens();
+        this.dom.titleScreen.classList.remove('hidden');
+        document.getElementById('start-panel').classList.remove('hidden');
+        this.audio.playBgm('title');
+    },
 };
 
 document.addEventListener('DOMContentLoaded', () => App.init());

@@ -495,18 +495,32 @@ class BattleManager {
         if (this.onEffect) this.onEffect('attack', isPlayerSide ? 'player' : 'enemy');
         await BattleManager.wait(1500);
 
-        // ダメージ計算
-        const power = parseInt(move['威力']);
-        if (!power || power <= 0) {
+        // ダメージ計算 (文字数ベース)
+        let characterCount = 0;
+
+        if (isPlayerSide && metrics.typedLength) {
+            // プレイヤーは実際に入力した文字数
+            characterCount = metrics.typedLength;
+        } else {
+            // 敵は標準的なローマ字変換の最短パターンを使用
+            const kanaName = this.typing.normalize(move['技名']);
+            const romajiOptions = this.typing.generateOptions(kanaName);
+            characterCount = (romajiOptions[0] || '').length;
+        }
+
+        if (characterCount <= 0) {
             this.message("しかし うまくきまらなかった！", msgType);
             await BattleManager.wait(1000);
             return 'ok';
         }
 
-        // 簡易ダメージ計算式
+        // 基礎威力: 1文字 = 10
+        const basePower = characterCount * 10;
+
+        // 簡易ダメージ計算式 (レベル・ステータス補正)
         const levelFactor = Math.floor(attacker.level * 2 / 5 + 2);
         const statRatio = attacker.atk / defender.def;
-        let damage = Math.floor((levelFactor * power * statRatio / 50) + 2);
+        let damage = Math.floor((levelFactor * basePower * statRatio / 50) + 2);
         damage = Math.floor(damage * (Math.random() * 0.15 + 0.85));
 
         // Speed Critical Bonus

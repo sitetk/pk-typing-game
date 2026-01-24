@@ -1754,3 +1754,9 @@ body.modal-open {
     /* blue-500 */
     color: white;
 }
+
+/* --- Fix for Pokemon Action Modal Z-Index --- */
+#pokemon-action-modal {
+    z-index: 2600;
+    /* Must be higher than story-pokemon-box-overlay (2500) */
+}
