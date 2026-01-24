@@ -684,6 +684,20 @@
                 <button id="story-pokemon-box-close-btn" class="story-pokemon-box-close"
                     aria-label="ポケモンボックスを閉じる">×</button>
             </header>
+            <div class="flex justify-between items-center px-4 mb-2">
+                <input type="text" id="story-box-search-input" placeholder="UUID検索..."
+                    class="text-xs border rounded px-2 py-1 flex-1 mr-2" style="max-width: 150px;">
+                <div class="flex gap-2">
+                    <button id="story-box-organize-btn"
+                        class="text-xs font-bold px-3 py-1 rounded-full border border-slate-300 bg-white text-emerald-600 hover:bg-slate-100 transition-colors">
+                        ボックス整理
+                    </button>
+                    <button id="story-box-sort-btn"
+                        class="text-xs font-bold px-3 py-1 rounded-full border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 transition-colors">
+                        並び替え
+                    </button>
+                </div>
+            </div>
             <div id="story-pokemon-party" class="story-pokemon-party" aria-label="てもちポケモン"></div>
             <div id="story-pokemon-box-grid" class="story-pokemon-box-grid" aria-label="ボックス格納ポケモン"></div>
             <p class="story-pokemon-box-note">ポケモンをタップして えらび、別のマスにタップすると入れかわります。空きマスには そのまま 移動します。</p>
@@ -693,7 +707,9 @@
     <!-- Pokemon Action Modal -->
     <div id="pokemon-action-modal" class="hidden modal-overlay">
         <div class="modal-card">
-            <h3 id="pokemon-action-title" class="text-xl font-bold text-slate-900 mb-4">ポケモンの操作</h3>
+            <h3 id="pokemon-action-title" class="text-xl font-bold text-slate-900 mb-1">ポケモンの操作</h3>
+            <p id="pokemon-action-uuid" class="text-xs text-slate-400 font-mono mb-4 text-center break-all select-all">
+            </p>
             <div class="flex flex-col gap-2">
                 <button id="pokemon-action-move-config"
                     class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
@@ -759,6 +775,25 @@
                 <button id="trainer-battle-cancel-btn" class="btn-secondary px-4 py-2 rounded-full">もどる</button>
                 <button id="trainer-battle-start-btn"
                     class="px-4 py-2 rounded-full bg-red-500 text-white font-bold shadow-lg hover:bg-red-600">バトル　スタート！</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Evolution Modal -->
+    <div id="evolution-modal" class="hidden modal-overlay" style="z-index: 9999;">
+        <div class="modal-card flex flex-col items-center">
+            <h3 class="text-2xl font-black text-slate-900 mb-2">おや...？</h3>
+            <p id="evolution-message" class="text-lg text-slate-700 mb-8 font-bold text-center">様子が おかしいぞ...！</p>
+
+            <div class="relative w-48 h-48 mb-8 flex items-center justify-center">
+                <div id="evolution-sprite-container" class="relative w-full h-full">
+                    <!-- Images will be injected here -->
+                </div>
+            </div>
+
+            <div class="modal-actions justify-center w-full">
+                <button id="evolution-confirm-btn"
+                    class="hidden px-8 py-3 rounded-full bg-blue-600 text-white font-bold shadow-lg animate-bounce">次へ</button>
             </div>
         </div>
     </div>

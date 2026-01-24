@@ -319,7 +319,7 @@ class BattleManager {
         if (Math.random() < catchRate) {
             if (this.onEffect) this.onEffect('ball-captured');
             this.message("やったー！ ポケモンを つかまえた！");
-            if (this.onEnemyCapture) this.onEnemyCapture(this.enemy);
+            if (this.onEnemyCapture) await this.onEnemyCapture(this.enemy);
 
             // 捕獲処理
             const caught = { ...this.enemy, isFainted: this.enemy.hp <= 0 };
@@ -555,7 +555,11 @@ class BattleManager {
 
         // 次の敵がいるか
         const defeatedEnemy = this.enemy;
-        if (this.onEnemyDefeat) this.onEnemyDefeat(defeatedEnemy);
+        if (this.onEnemyDefeat) await this.onEnemyDefeat(defeatedEnemy);
+
+        if (this.onEnemyDefeat && this.onEnemyDefeat.constructor.name === 'AsyncFunction') {
+            // already awaited above
+        }
 
         if (this.enemyIndex < this.enemyPartyEntities.length - 1) {
             this.enemyIndex++;
@@ -628,5 +632,25 @@ class BattleManager {
 
     notifyUpdate() {
         if (this.onUpdateUI) this.onUpdateUI(this.player, this.enemy);
+    }
+
+    async updateLevel(entity, newLevel) {
+        const oldMaxHp = entity.maxHp;
+        entity.level = newLevel;
+        // Calculation based on createEntity logic
+        // const maxHp = Math.floor(data['HP'] * actualLevel / 20) + 20;
+        // entity has data merged
+        entity.maxHp = Math.floor((entity['HP'] || 50) * newLevel / 20) + 20;
+
+        const hpDiff = entity.maxHp - oldMaxHp;
+        if (hpDiff > 0) {
+            entity.hp += hpDiff;
+        }
+
+        entity.atk = Math.floor((entity['Attack'] || 50) * newLevel / 50) + 5;
+        entity.def = Math.floor((entity['Defense'] || 50) * newLevel / 50) + 5;
+        entity.spd = Math.floor((entity['Speed'] || 50) * newLevel / 50) + 5;
+
+        this.notifyUpdate();
     }
 }

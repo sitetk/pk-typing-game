@@ -1217,7 +1217,7 @@ body.modal-open {
 
 .story-pokemon-box-card {
     width: min(1200px, 95vw);
-    max-height: min(90vh, 800px);
+    max-height: min(100vh, 800px);
     border-radius: 1.25rem;
     background: #ffffff;
     padding: 1rem;
@@ -1295,7 +1295,7 @@ body.modal-open {
 
 .story-pokemon-box-grid {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 0.5rem;
     max-height: min(60vh, 600px);
     overflow-y: auto;
@@ -1321,6 +1321,15 @@ body.modal-open {
     border-style: solid;
     border-color: #f97316;
     box-shadow: 0 6px 15px rgba(249, 115, 22, 0.3);
+}
+
+.story-pokemon-box-slot.box-organize-selected,
+.story-pokemon-party-slot.box-organize-selected {
+    border-style: solid;
+    border-color: #ef4444;
+    background-color: #fef2f2;
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.2);
+    transform: scale(0.95);
 }
 
 .story-pokemon-box-slot--empty {
@@ -1703,7 +1712,7 @@ body.modal-open {
 }
 
 .story-stage-card-summary {
-    font-size: 0.7rem;
+    font-size: 0.9rem;
     color: #475569;
     line-height: 1.4;
     flex: 1;
@@ -1759,4 +1768,59 @@ body.modal-open {
 #pokemon-action-modal {
     z-index: 2600;
     /* Must be higher than story-pokemon-box-overlay (2500) */
+}
+
+/* --- Story Box Sort Mode (Red Frame) --- */
+#story-box-sort-btn.active {
+    background-color: #3b82f6;
+    color: white;
+    border-color: #2563eb;
+    box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.5);
+}
+
+.story-pokemon-party-slot.sort-selected,
+.story-pokemon-box-slot.sort-selected {
+    border-color: #ef4444 !important;
+    box-shadow: 0 0 0 3px #ef4444, 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    background-color: #fef2f2;
+    transform: translateY(-2px);
+    z-index: 10;
+}
+
+
+/* --- Evolution Modal --- */
+#evolution-modal .modal-card {
+    max-width: 500px;
+    background: radial-gradient(circle at center, #ffffff 0%, #f1f5f9 100%);
+    border: 4px solid #3b82f6;
+    /* blue-500 */
+}
+
+#evolution-sprite-container img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    image-rendering: pixelated;
+    transition: opacity 0.1s;
+}
+
+@keyframes evolution-flash {
+    0% {
+        opacity: 1;
+        filter: brightness(1);
+    }
+
+    50% {
+        opacity: 0.2;
+        filter: brightness(2);
+    }
+
+    100% {
+        opacity: 1;
+        filter: brightness(1);
+    }
+}
+
+.anim-evolution-flash {
+    animation: evolution-flash 0.1s infinite;
 }
