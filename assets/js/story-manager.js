@@ -9,7 +9,7 @@ const STORY_REGIONS = {
         label: 'カントー地方編',
         description: 'マサラタウンから はじまる ぼうけんの はじまり。',
         image: 'assets/img/kanto-story-img.png',
-        stageIds: createStageIds(48)
+        stageIds: createStageIds(52)
     },
     DEFAULT: {
         key: 'DEFAULT',
@@ -86,7 +86,7 @@ class StoryManager {
 
     showStoryStageScreen(stages = []) {
         this.app.storyCollectionInitialized = true;
-        const maxStageTiles = 48;
+        const maxStageTiles = 52;
         const displayStages = Array.isArray(stages) ? stages.slice(0, maxStageTiles) : [];
         this.storyStageList = displayStages;
         this.app.hideAllScreens();
