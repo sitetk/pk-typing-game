@@ -211,7 +211,8 @@
         </div>
 
         <div id="story-stage-screen"
-            class="hidden w-full max-w-4xl p-5 md:p-6 lg:p-8 animate-in fade-in duration-500 bg-white/95 rounded-3xl shadow-2xl backdrop-blur-sm">
+            class="hidden w-full max-w-[1900px] p-5 md:p-6 lg:p-8 animate-in fade-in duration-500 bg-white/95 rounded-3xl shadow-2xl backdrop-blur-sm">
+
             <header class="relative flex items-center justify-center mb-6">
                 <button id="story-stage-back-btn" class="absolute left-0 text-slate-500 font-bold hover:text-blue-600">←
                     もどる</button>
@@ -220,37 +221,96 @@
                     <h2 class="text-3xl font-black text-[#1e293b]">ステージ を えらぶ</h2>
                 </div>
             </header>
-            <div class="story-stage-action-row mb-6">
-                <button id="pokemon-box-btn" class="story-stage-action-btn" disabled>ポケモンボックス</button>
-                <button id="friendly-shop-btn" class="story-stage-action-btn story-stage-action-btn--disabled"
-                    disabled>フレンドリィショップ</button>
-            </div>
-            <div
-                class="story-stage-screen-banner border border-slate-200 rounded-2xl overflow-hidden mb-6 flex flex-col md:flex-row gap-4 items-center">
-                <img src="assets/img/kanto-story-img.png" alt="カントー地方編" class="story-stage-banner-img"
-                    id="story-stage-banner-img">
-                <div class="story-stage-banner-text">
-                    <p id="story-stage-region-label" class="text-xs uppercase tracking-[0.4em] text-slate-400 mb-1">
-                        カントー地方編</p>
-                    <h3 id="story-stage-current-name" class="text-2xl font-black text-[#1e293b] mb-1">ステージが ありません</h3>
-                    <p id="story-stage-current-description" class="text-sm text-slate-500">ステージを えらぶと ここに じょうほうが
-                        ひょうじされます。</p>
+
+            <div class="flex flex-col lg:flex-row gap-6 items-start">
+                <!-- LEFT COLUMN: Party & Box -->
+                <div class="w-full lg:w-96 flex-shrink-0 lg:sticky lg:top-4 flex flex-col gap-4">
+                    <button id="pokemon-box-btn" class="story-stage-action-btn w-full" disabled>ポケモンボックス</button>
+
+                    <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 shadow-inner">
+                        <h3 class="text-xs font-bold text-slate-500 mb-2 text-center uppercase tracking-wider">てもちポケモン
+                        </h3>
+                        <div id="story-side-party-list" class="flex flex-col gap-2 min-h-[200px]">
+                            <!-- Party items rendered by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CENTER COLUMN: Banner & Stages -->
+                <div class="flex-1 w-full max-w-4xl mx-auto">
+                    <div class="mb-6 w-full rounded-2xl overflow-hidden shadow-sm">
+                        <img src="assets/img/kanto-story-img.png" alt="Region Banner" id="story-stage-banner-img"
+                            class="w-full h-auto object-cover max-h-48">
+                    </div>
+
+                    <!-- Old Action Row (Hidden/Removed as Box moved, Shop moved) -->
+                    <!-- <div class="story-stage-action-row mb-6">...</div> -->
+
+                    <div
+                        class="story-stage-screen-banner border border-slate-200 rounded-2xl overflow-hidden mb-6 flex flex-col md:flex-row gap-4 items-center">
+                        <div
+                            class="story-stage-banner-stats w-full grid grid-cols-2 md:grid-cols-4 gap-4 p-4 items-center">
+                            <div class="stat-item flex flex-col items-center border-r border-slate-200 last:border-0">
+                                <span class="text-[16px] text-[#333] font-bold uppercase tracking-wider">ステージクリア</span>
+                                <span id="story-stat-clear-progress" class="text-xl font-black text-slate-700">0%</span>
+                            </div>
+                            <div class="stat-item flex flex-col items-center border-r border-slate-200 last:border-0">
+                                <span class="text-[16px] text-[#333] font-bold uppercase tracking-wider">図鑑 (種類)</span>
+                                <span id="story-stat-captured-species"
+                                    class="text-xl font-black text-blue-600">0体</span>
+                            </div>
+                            <div class="stat-item flex flex-col items-center border-r border-slate-200 last:border-0">
+                                <span class="text-[16px] text-[#333] font-bold uppercase tracking-wider">捕獲合計</span>
+                                <span id="story-stat-captured-total" class="text-xl font-black text-slate-700">0体</span>
+                            </div>
+                            <div class="stat-item flex flex-col items-center">
+                                <span class="text-[16px] text-[#333] font-bold uppercase tracking-wider">ゴールド</span>
+                                <span id="story-stat-gold" class="text-xl font-black text-yellow-600">0G</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="story-stage-grid" id="story-stage-grid"></div>
+                </div>
+
+                <!-- RIGHT COLUMN: Shop -->
+                <div class="w-full lg:w-96 flex-shrink-0 lg:sticky lg:top-4">
+                    <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 shadow-inner">
+                        <h3 class="text-sm font-bold text-slate-500 mb-3 text-center uppercase tracking-wider">
+                            フレンドリィショップ</h3>
+                        <div id="story-side-shop-list" class="flex flex-col gap-3">
+                            <div
+                                class="bg-white p-3 rounded-xl border border-slate-200 flex items-center gap-4 shadow-sm opacity-50 grayscale cursor-not-allowed">
+                                <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/potion.png"
+                                    class="w-16 h-16 object-contain pixel-art">
+                                <div>
+                                    <div class="text-base font-bold text-slate-700">キズぐすり</div>
+                                    <div class="text-sm text-slate-500 font-mono">200G</div>
+                                </div>
+                            </div>
+                            <div
+                                class="bg-white p-3 rounded-xl border border-slate-200 flex items-center gap-4 shadow-sm opacity-50 grayscale cursor-not-allowed">
+                                <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png"
+                                    class="w-16 h-16 object-contain pixel-art">
+                                <div>
+                                    <div class="text-base font-bold text-slate-700">モンスターボール</div>
+                                    <div class="text-sm text-slate-500 font-mono">200G</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="story-stage-grid" id="story-stage-grid"></div>
-
         </div>
 
         <!-- パーティ選択画面 -->
         <div id="party-select-screen"
             class="hidden w-full max-w-6xl p-4 md:p-8 animate-in fade-in duration-500 bg-white/90 rounded-3xl shadow-xl backdrop-blur-sm">
-            <header class="relative flex items-center justify-center mb-6">
-                <button id="party-back-btn" class="absolute left-0 text-slate-500 font-bold hover:text-blue-600">←
-                    もどる</button>
-                <h2 class="text-3xl font-black text-[#333]">パーティ せんたく</h2>
-                <button
-                    class="mode-switch-btn absolute right-0 text-sm bg-slate-100 px-3 py-1 rounded-full hover:bg-slate-200">モード切替
-                    ⇄</button>
+            <button id="party-back-btn" class="absolute left-0 text-slate-500 font-bold hover:text-blue-600">←
+                もどる</button>
+            <h2 class="text-3xl font-black text-[#333]">パーティ せんたく</h2>
+            <button
+                class="mode-switch-btn absolute right-0 text-sm bg-slate-100 px-3 py-1 rounded-full hover:bg-slate-200">モード切替
+                ⇄</button>
             </header>
             <p class="text-slate-500 mb-6 font-mono text-sm text-center">いっしょに たたかう ポケモンを えらんでね</p>
             <div class="party-cards-wrapper mb-4">
@@ -319,7 +379,8 @@
         <div id="enemy-select-screen"
             class="hidden w-full max-w-6xl p-4 md:p-6 animate-in fade-in duration-500 bg-white/90 rounded-3xl shadow-xl backdrop-blur-sm">
             <header class="relative flex items-center justify-between mb-4">
-                <button id="enemy-select-back-btn" class="text-slate-500 font-bold hover:text-blue-600">← もどる</button>
+                <button id="enemy-select-back-btn" class="text-slate-500 font-bold hover:text-blue-600">←
+                    もどる</button>
                 <h2 class="text-2xl font-black text-red-600">あいてのポケモンをえらぶ</h2>
                 <button id="enemy-confirm-btn"
                     class="bg-red-600 text-white px-6 py-2 rounded-full font-bold shadow disabled:opacity-50">決定</button>
@@ -537,14 +598,16 @@
                                     <h3 class="text-lg font-bold text-[#333]">どうぐ</h3>
                                 </div>
                                 <div id="item-list"
-                                    class="flex-1 overflow-y-auto flex flex-col gap-2 pb-2 content-start pr-1"></div>
+                                    class="flex-1 overflow-y-auto flex flex-col gap-2 pb-2 content-start pr-1">
+                                </div>
                             </div>
                             <div id="pokemon-menu" class="hidden absolute inset-0 bg-white z-40 p-4 flex flex-col">
                                 <div class="flex justify-between items-end mb-2 border-b border-slate-200 pb-2">
                                     <h3 id="pokemon-menu-title" class="text-lg font-bold text-[#333]">ポケモン</h3>
                                 </div>
                                 <div id="party-list"
-                                    class="flex-1 overflow-y-auto flex flex-col gap-2 pb-2 content-start pr-1"></div>
+                                    class="flex-1 overflow-y-auto flex flex-col gap-2 pb-2 content-start pr-1">
+                                </div>
                             </div>
                         </div>
                     </div>

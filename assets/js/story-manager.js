@@ -98,11 +98,29 @@ class StoryManager {
         }
         if (this.app.dom.storyStageScreen) this.app.dom.storyStageScreen.classList.remove('hidden');
         this.renderStoryStages(displayStages);
+        this.renderSidePartyPanel();
+
+        // Stats Calculation
+        const totalStages = displayStages.length || 52;
+        const clearedCount = this.app.clearedStages.size;
+        const clearPercentage = Math.round((clearedCount / totalStages) * 100);
+
+        const capturedSpecies = this.app.capturedPokemonIds.size;
+        const totalCaptured = this.app.storyOwnedPokemonDetails.length;
+        const money = this.app.money || 0;
+
+        // Update Stats DOM
+        const elProgress = document.getElementById('story-stat-clear-progress');
+        const elSpecies = document.getElementById('story-stat-captured-species');
+        const elTotal = document.getElementById('story-stat-captured-total');
+        const elGold = document.getElementById('story-stat-gold');
+
+        if (elProgress) elProgress.textContent = `${clearPercentage}%`;
+        if (elSpecies) elSpecies.textContent = `${capturedSpecies}種`;
+        if (elTotal) elTotal.textContent = `${totalCaptured}体`;
+        if (elGold) elGold.textContent = `${money}G`;
+
         const firstStage = displayStages[0];
-        if (this.app.dom.storyStageTitle) this.app.dom.storyStageTitle.textContent = firstStage?.name || 'ステージを えらぶ';
-        if (this.app.dom.storyStageDesc) {
-            this.app.dom.storyStageDesc.textContent = firstStage?.description || 'ステージを えらぶと ここに じょうほうが ひょうじされます。';
-        }
         this.app.recordScreen('story-stage-select');
         if (firstStage) {
             this.handleStoryStageSelect(firstStage.id, { openModal: false });
@@ -121,8 +139,11 @@ class StoryManager {
         this.app.getStageModalData = reward;
         this.app.selectedGetStageRewardIndex = null;
         this.app.storySelectedStageId = stageId;
-        if (this.app.dom.storyStageTitle) this.app.dom.storyStageTitle.textContent = stage.name;
-        if (this.app.dom.storyStageDesc) this.app.dom.storyStageDesc.textContent = stage.description;
+        this.app.getStageModalData = reward;
+        this.app.selectedGetStageRewardIndex = null;
+        this.app.storySelectedStageId = stageId;
+        // if (this.app.dom.storyStageTitle) this.app.dom.storyStageTitle.textContent = stage.name;
+        // if (this.app.dom.storyStageDesc) this.app.dom.storyStageDesc.textContent = stage.description;
         this.app.dom.storyStageGrid.querySelectorAll('.story-stage-block').forEach(block => {
             block.classList.toggle('selected', block.dataset.stageId === stageId);
         });
@@ -227,6 +248,39 @@ class StoryManager {
         });
 
         console.log('[renderStoryStages] Attached', this.app.dom.storyStageGrid.querySelectorAll('.story-stage-block').length, 'handlers');
+    }
+
+    renderSidePartyPanel() {
+        const container = document.getElementById('story-side-party-list');
+        if (!container) return;
+
+        const party = this.app.storyPartySlots || [];
+        // Show all 6 slots? Or just filled ones?
+        // Usually showing 6 slots is good for consistency.
+
+        container.innerHTML = party.map((uuid, index) => {
+            const pokemon = uuid ? this.app.storyOwnedPokemonDetails.find(p => p.uuid === uuid) : null;
+            if (!pokemon) {
+                return `
+                <div class="flex items-center gap-4 p-4 rounded-xl border border-dashed border-slate-300 bg-slate-100/50 opacity-60">
+                    <div class="w-12 h-12 rounded-full bg-slate-200 flex items-center justify-center text-xs text-slate-400 font-bold">${index + 1}</div>
+                    <span class="text-sm text-slate-400">---</span>
+                </div>`;
+            }
+
+            const spriteUrl = Utils.getSpriteUrl(pokemon['図鑑No']);
+            const displayName = pokemon.nickname || pokemon['名前（日本語）'];
+            const level = pokemon['獲得レベル'] || pokemon.level || 5;
+
+            return `
+            <div class="flex items-center gap-4 p-3 rounded-xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-all cursor-pointer" onclick="App.openPokemonActionModal('${uuid}')">
+                <img src="${spriteUrl}" alt="${displayName}" class="w-16 h-16 object-contain pixel-art transform scale-110">
+                <div class="flex flex-col min-w-0">
+                    <span class="text-base font-bold text-slate-700 truncate">${displayName}</span>
+                    <span class="text-xs text-slate-500 font-mono">Lv.${level}</span>
+                </div>
+            </div>`;
+        }).join('');
     }
 
     attachStoryRegionCardHandlers() {

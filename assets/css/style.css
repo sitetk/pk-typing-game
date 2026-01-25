@@ -89,11 +89,12 @@ body.modal-open {
     border-color: #0284c7;
 }
 
+/* Game Container: Allow full width for Story Mode 1900px */
 .game-container {
     container-type: size;
     container-name: game-viewport;
-    width: min(100%, 1200px);
-    max-width: 1200px;
+    width: 100%;
+    max-width: 100%;
     margin: 0 auto;
     padding: 10px;
     min-height: 100vh;
@@ -104,13 +105,20 @@ body.modal-open {
 }
 
 /* 各画面コンテナの幅調整 */
+/* Battle Screen remains limited for optimal layout */
+#battle-screen {
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
 #title-screen,
 #party-select-screen,
 #custom-party-screen,
 #enemy-select-screen,
-#move-config-screen,
-#battle-screen {
+#move-config-screen {
     width: 100%;
+    /* Let Tailwind controls the max-width for these screens */
     max-width: none;
     margin: 0 auto;
 }

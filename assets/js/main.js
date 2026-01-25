@@ -42,6 +42,7 @@ const App = {
     defeatedPokemonIds: new Set(),
     capturedPokemonIds: new Set(),
     storyItems: new Set(),
+    money: 0,
     getStageModalData: null,
     selectedGetStageRewardIndex: null,
     currentPage: 1, // 相手選択用ページ
@@ -794,6 +795,7 @@ const App = {
     setActiveSlotFromData(slotData = {}) {
         this.playerName = slotData.playerName || 'プレイヤー';
         this.accumulatedPlayTime = slotData.playTime || 0;
+        this.money = slotData.money || 0;
     },
 
     openNameInputModal() {
@@ -988,7 +990,8 @@ const App = {
                 exp: pk.exp,
                 nickname: pk.nickname
             })),
-            currentParty: this.storyPartySlots
+            currentParty: this.storyPartySlots,
+            money: this.money || 0
         });
     },
 
@@ -1419,15 +1422,16 @@ const App = {
             if (win) {
                 this.clearedStages.add(stageId);
 
-                // 経験値処理 (BattleManager.onEnemyDefeat で実施済みのためここでは削除)
-                // let earnedExp = 0;
-                // if (trainerData && trainerData.party) {
-                //    earnedExp = trainerData.party.reduce((sum, p) => sum + ((p.level || 5) * 15), 0);
-                // }
-                // this.gainExp(earnedExp);
+                // Money Reward (処理前に表示)
+                const reward = parseInt(trainerData.reward) || 0;
+                if (reward > 0) {
+                    this.money = (this.money || 0) + reward;
+                    await this.showSystemMessage(`${trainerData.name}との バトルに かった！\nしょうきん ${reward}G を 手に入れた！`, 'しょうり！');
+                } else {
+                    await this.showSystemMessage(`${trainerData.name} との バトルに かった！`, 'しょうり！');
+                }
 
                 this.saveStoryProgress();
-                await this.showSystemMessage(`${trainerData.name} との バトルに かった！`, 'しょうり！');
 
                 // 進化チェック
                 await this.checkAndProcessEvolution();
@@ -1962,6 +1966,9 @@ const App = {
     },
 
     renderStoryPokemonParty() {
+        if (this.storyManager && typeof this.storyManager.renderSidePartyPanel === 'function') {
+            this.storyManager.renderSidePartyPanel();
+        }
         if (!this.dom.storyPokemonParty) return;
         const html = this.storyPartySlots.map((uuid, index) => {
             const pokemon = uuid ? this.storyOwnedPokemonDetails.find(pk => pk.uuid === uuid) : null;

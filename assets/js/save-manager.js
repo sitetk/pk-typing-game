@@ -20,7 +20,8 @@ class SaveManager {
             currentParty: [],
             playTime: 0,
             storyItems: [],
-            ownedPokemonData: []
+            ownedPokemonData: [],
+            money: 0
         };
     }
 
@@ -118,7 +119,8 @@ class SaveManager {
                 ? slotData.playTime
                 : Number(slotData.playTime) || template.playTime,
             storyItems: Array.isArray(slotData.storyItems) ? slotData.storyItems : template.storyItems,
-            ownedPokemonData: Array.isArray(slotData.ownedPokemonData) ? slotData.ownedPokemonData : template.ownedPokemonData
+            ownedPokemonData: Array.isArray(slotData.ownedPokemonData) ? slotData.ownedPokemonData : template.ownedPokemonData,
+            money: typeof slotData.money === 'number' ? slotData.money : template.money
         };
     }
 
