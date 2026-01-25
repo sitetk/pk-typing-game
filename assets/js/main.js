@@ -710,7 +710,8 @@ const App = {
                     '獲得レベル': data.level || 5,
                     exp: data.exp || ExpTable.getExpForLevel(data.level || 5),
                     uuid: data.uuid || this.generateUUID(), // UUIDがなければ生成
-                    nickname: data.nickname || ''
+                    nickname: data.nickname || '',
+                    selectedMoves: data.selectedMoves || [] // 技構成を復元
                 };
             })
             .filter(Boolean);
@@ -1293,7 +1294,10 @@ const App = {
                 ...baseData,
                 uuid: owned.uuid,
                 level: owned['獲得レベル'] || 5,
-                nickname: owned.nickname
+                uuid: owned.uuid,
+                level: owned['獲得レベル'] || 5,
+                nickname: owned.nickname,
+                selectedMoves: owned.selectedMoves // 技構成を引き継ぐ
             };
         }).filter(Boolean);
 
@@ -1485,7 +1489,8 @@ const App = {
                     ...baseData,
                     uuid: owned.uuid,
                     level: owned['獲得レベル'] || 5,
-                    nickname: owned.nickname
+                    nickname: owned.nickname,
+                    selectedMoves: owned.selectedMoves // 技構成を引き継ぐ
                 };
             }).filter(Boolean);
         }
